@@ -1,7 +1,8 @@
 # ha-tuya-pilot-wire — guide for agent sessions
 
 Home Assistant integration (Companion, domain `tuya_pilot_wire`) of the pilot-wire project, and
-the home of its scope. Read `docs/scope.md`, then `docs/architecture.md` and `docs/roadmap.md`.
+the home of its scope. Read `docs/scope.md`, then `docs/architecture.md`, `docs/roadmap.md`, `docs/device.md` and
+`docs/companion.md`.
 
 ## The three repositories
 
@@ -32,8 +33,10 @@ and `~/dev/pydanfoss-cloud`. Reuse their patterns; do not import their code.
 
 ## Where the work stands
 
-Skeleton only: config flow (bridge prefixes), no entity. Next: milestone M0 (identify the radio
-and the Zigbee fingerprint of the thermostat; settle the contract's property names).
+M0 done (`docs/device.md`). M3 built: the Companion reads (`docs/companion.md`) — MQTT
+coordinator, one device model for both bridges, rooms in Home Assistant storage, `climate`,
+`sensor`, `binary_sensor`, diagnostics, options flow, room services. **No write is open**
+(`const.OPEN_SET_KEYS` is empty). Next: M4, one write at a time, each with its supervised trial.
 
 ## Quality
 

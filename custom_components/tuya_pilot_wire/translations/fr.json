@@ -15,5 +15,218 @@
     "abort": {
       "single_instance_allowed": "Déjà configuré. Une seule configuration est possible."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Tuya Pilot Wire Companion",
+        "menu_options": {
+          "bridges": "Ponts",
+          "add_room": "Ajouter une pièce",
+          "edit_room": "Modifier une pièce",
+          "delete_room": "Supprimer une pièce"
+        }
+      },
+      "bridges": {
+        "title": "Ponts",
+        "description": "La Companion lit les thermostats fil pilote publiés par des ponts MQTT. Indiquez le préfixe de topic de chaque pont à lire, séparés par des virgules.",
+        "data": {
+          "mqtt_prefixes": "Préfixes des ponts"
+        }
+      },
+      "add_room": {
+        "title": "Ajouter une pièce",
+        "description": "Une pièce regroupe des thermostats et affiche un seul thermostat pour tous. Un thermostat appartient à une pièce au plus. Rien n'est envoyé aux appareils.",
+        "data": {
+          "name": "Nom",
+          "thermostats": "Thermostats"
+        }
+      },
+      "edit_room": {
+        "title": "Modifier une pièce",
+        "data": {
+          "room": "Pièce"
+        }
+      },
+      "room": {
+        "title": "Pièce {room}",
+        "description": "Une pièce regroupe des thermostats et affiche un seul thermostat pour tous. Un thermostat appartient à une pièce au plus. Rien n'est envoyé aux appareils.",
+        "data": {
+          "name": "Nom",
+          "thermostats": "Thermostats"
+        }
+      },
+      "delete_room": {
+        "title": "Supprimer une pièce",
+        "description": "Les thermostats de la pièce restent, chacun avec sa propre entité thermostat. Rien n'est envoyé aux appareils.",
+        "data": {
+          "room": "Pièce"
+        }
+      }
+    },
+    "error": {
+      "invalid_prefixes": "Indiquez au moins un préfixe ; lettres, chiffres, tiret et tiret bas uniquement.",
+      "room_name_empty": "Donnez un nom à la pièce.",
+      "room_name_taken": "Une autre pièce porte déjà ce nom.",
+      "thermostat_in_other_room": "L'un de ces thermostats appartient déjà à une autre pièce."
+    },
+    "abort": {
+      "not_loaded": "La Companion Tuya Pilot Wire n'est pas chargée."
+    }
+  },
+  "entity": {
+    "climate": {
+      "thermostat": {
+        "state_attributes": {
+          "preset": {
+            "name": "Mode",
+            "state": {
+              "program": "Programme",
+              "manual": "Manuel",
+              "eco": "Éco",
+              "holiday": "Vacances",
+              "antifrost": "Hors-gel"
+            }
+          },
+          "members": {
+            "name": "Thermostats"
+          },
+          "members_missing": {
+            "name": "Thermostats qui ne répondent pas"
+          },
+          "differing": {
+            "name": "Valeurs en désaccord"
+          },
+          "current_heating_setpoint": {
+            "name": "Consigne manuelle"
+          },
+          "eco_temperature": {
+            "name": "Consigne éco"
+          },
+          "antifrost_temperature": {
+            "name": "Consigne hors-gel"
+          },
+          "holiday_temperature": {
+            "name": "Consigne vacances"
+          },
+          "target_temperature": {
+            "name": "Consigne"
+          }
+        }
+      }
+    },
+    "sensor": {
+      "local_temperature": {
+        "name": "Température"
+      },
+      "preset": {
+        "name": "Mode",
+        "state": {
+          "program": "Programme",
+          "manual": "Manuel",
+          "eco": "Éco",
+          "holiday": "Vacances",
+          "antifrost": "Hors-gel"
+        }
+      },
+      "target_temperature": {
+        "name": "Consigne"
+      }
+    },
+    "binary_sensor": {
+      "heating": {
+        "name": "Chauffe"
+      },
+      "fault": {
+        "name": "Défaut",
+        "state_attributes": {
+          "faults": {
+            "name": "Défauts"
+          }
+        }
+      },
+      "disagreement": {
+        "name": "Thermostats en désaccord",
+        "state_attributes": {
+          "differing": {
+            "name": "Valeurs en désaccord"
+          },
+          "members_missing": {
+            "name": "Thermostats qui ne répondent pas"
+          }
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "no_write_route": {
+      "message": "Ce thermostat est en lecture seule pour l'instant : aucune route d'écriture n'est ouverte dans la Companion."
+    },
+    "not_loaded": {
+      "message": "La Companion Tuya Pilot Wire n'est pas chargée."
+    },
+    "thermostat_unknown": {
+      "message": "Aucun thermostat ne correspond à « {thermostat} »."
+    },
+    "room_unknown": {
+      "message": "Aucune pièce ne correspond à « {room} »."
+    },
+    "room_name_empty": {
+      "message": "Donnez un nom à la pièce."
+    },
+    "room_name_taken": {
+      "message": "Une autre pièce s'appelle déjà « {name} »."
+    },
+    "thermostat_in_other_room": {
+      "message": "Un thermostat appartient déjà à la pièce « {room} »."
+    }
+  },
+  "services": {
+    "create_room": {
+      "name": "Créer une pièce",
+      "description": "Crée une pièce et y rattache des thermostats. Ne modifie que le stockage de Home Assistant ; rien n'est envoyé aux appareils.",
+      "fields": {
+        "name": {
+          "name": "Nom",
+          "description": "Nom de la pièce."
+        },
+        "thermostats": {
+          "name": "Thermostats",
+          "description": "Thermostats de la pièce : identifiants d'appareil, ou noms donnés par le pont."
+        }
+      }
+    },
+    "update_room": {
+      "name": "Modifier une pièce",
+      "description": "Renomme une pièce et/ou remplace ses thermostats. Rien n'est envoyé aux appareils.",
+      "fields": {
+        "room": {
+          "name": "Pièce",
+          "description": "La pièce : son identifiant d'appareil, ou son nom."
+        },
+        "name": {
+          "name": "Nom",
+          "description": "Nouveau nom de la pièce."
+        },
+        "thermostats": {
+          "name": "Thermostats",
+          "description": "La liste complète des thermostats de la pièce ; elle remplace la liste actuelle."
+        }
+      }
+    },
+    "delete_room": {
+      "name": "Supprimer une pièce",
+      "description": "Supprime une pièce. Ses thermostats restent, chacun avec sa propre entité thermostat.",
+      "fields": {
+        "room": {
+          "name": "Pièce",
+          "description": "La pièce : son identifiant d'appareil, ou son nom."
+        }
+      }
+    },
+    "list_rooms": {
+      "name": "Lister les pièces",
+      "description": "Renvoie les pièces, leurs thermostats, et les thermostats hors pièce."
+    }
   }
 }

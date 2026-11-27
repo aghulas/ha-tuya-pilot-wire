@@ -1,6 +1,7 @@
 # Architecture
 
-Status: target architecture, nothing built yet. Scope and known facts: [`scope.md`](scope.md).
+Status: target architecture. Built so far: the Companion's read side ([`companion.md`](companion.md)).
+Scope and known facts: [`scope.md`](scope.md); the device: [`device.md`](device.md).
 MQTT contract: [`tuyapilot2mqtt/docs/mqtt-contract.md`](https://github.com/aghulas/tuyapilot2mqtt/blob/main/docs/mqtt-contract.md).
 
 ```
@@ -67,7 +68,7 @@ refuses the command and the Companion shows no entity for it.
 
 | Operation | Tuya gateway (`tuyapilot2mqtt`) | Zigbee2MQTT |
 |---|---|---|
-| Read state | sharing API (proven); LAN for power and energy (proven) | to establish (M0, M5) |
+| Read state | sharing API (proven); LAN for power and energy (proven) | to establish (M5: needs a converter, [`device.md`](device.md)) |
 | On / off | sharing API (proven) | |
 | Mode | sharing API (proven) | |
 | Manual setpoint | sharing API (proven; not applied in frost-protection mode) | |

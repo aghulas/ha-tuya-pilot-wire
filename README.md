@@ -18,15 +18,30 @@ Unofficial: not affiliated with Tuya.
 
 ## Status
 
-**Scoping — nothing to use yet.** The integration installs and asks for the bridge prefixes, and
-creates no entity. Read:
+**Read only.** The integration reads the thermostats the bridges publish and shows them in Home
+Assistant, per thermostat and per room: temperature, setpoint, mode, heating, window, fault,
+power and energy. It sends nothing to a device yet: writes open one at a time, each after a
+supervised trial on real hardware ([roadmap](docs/roadmap.md), M4).
 
-- [`docs/scope.md`](docs/scope.md) — goal, hardware in scope, what is already known from real
-  hardware, principles, open questions;
+- [`docs/companion.md`](docs/companion.md) — what the integration reads, its entities, rooms;
+- [`docs/device.md`](docs/device.md) — the thermostat: Zigbee fingerprint, Zigbee2MQTT support;
+- [`docs/scope.md`](docs/scope.md) — goal, hardware in scope, what is known from real hardware,
+  principles, open questions;
 - [`docs/architecture.md`](docs/architecture.md) — components, routing, rooms;
 - [`docs/roadmap.md`](docs/roadmap.md) — milestones M0 to M6;
-- the [MQTT contract](https://github.com/aghulas/tuyapilot2mqtt/blob/main/docs/mqtt-contract.md)
-  (draft), in the bridge's repository.
+- the [MQTT contract](https://github.com/aghulas/tuyapilot2mqtt/blob/main/docs/mqtt-contract.md),
+  in the bridge's repository.
+
+## Installation
+
+Needs Home Assistant 2025.2 or later with the MQTT integration set up, and a bridge publishing
+on the same broker ([`tuyapilot2mqtt`](https://github.com/aghulas/tuyapilot2mqtt)).
+
+1. HACS → Custom repositories → `https://github.com/aghulas/ha-tuya-pilot-wire`, type
+   Integration; install "Tuya Pilot Wire Companion"; restart Home Assistant.
+2. Settings → Devices & services → Add integration → "Tuya Pilot Wire Companion"; give the bridge
+   prefixes.
+3. Configure → "Add a room" to group thermostats.
 
 | Repository | Role |
 |---|---|
@@ -37,10 +52,12 @@ creates no entity. Read:
 ## Hardware
 
 One product so far: the Tuya "FP Thermostat" (pilot-wire thermostat, category `wk`, product id
-`fu1bfwza`) behind a Tuya gateway. If you own one, or another Tuya pilot-wire thermostat, an issue
-with its model and what your gateway is would help milestone M0.
+`fu1bfwza`, Zigbee `TS0601` / `_TZE204_fu1bfwza`) behind a Tuya gateway. If you own another Tuya
+pilot-wire thermostat, an issue with its model and what your gateway is would help.
 
 ## What it will offer
+
+Read today, written from M4 on:
 
 - One thermostat per **room**, with the setpoint fanned out to the room's thermostats.
 - Presets: schedule, manual, eco, holiday, frost protection.

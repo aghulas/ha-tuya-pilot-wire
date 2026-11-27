@@ -8,3 +8,4 @@ select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC", "FURB"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+addopts = "--cov=custom_components/tuya_pilot_wire --cov-report=term-missing --cov-fail-under=95"
