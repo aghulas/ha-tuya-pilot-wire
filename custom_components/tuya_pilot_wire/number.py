@@ -1,10 +1,10 @@
-"""Number: the manual setpoint of the thermostat designated for the supervised trial.
+"""Number: the manual setpoint of one thermostat, in a room or not.
 
-The only write the Companion can publish, and not an open one: the entity exists for one
-thermostat, chosen by the owner in the options, and only once its bridge has said it is not read
-only (`CompanionCoordinator.supports_set`). It shows `current_heating_setpoint`, the setpoint of
-the **manual** preset: in another preset the thermostat stores a new value and does not regulate
-on it.
+The entity exists for a thermostat once its bridge has announced the manual setpoint open for it
+(`CompanionCoordinator.supports_set`), and is unavailable whenever the bridge closes it again. It
+shows `current_heating_setpoint`, the setpoint of the **manual** preset; a write is refused
+before anything is sent while the thermostat is in another preset, where the device does not keep
+it (contract §4).
 
 Nothing is assumed after a write: the value shown changes when the bridge publishes what the
 device confirmed.
@@ -15,18 +15,19 @@ from __future__ import annotations
 from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberMode
 from homeassistant.const import EntityCategory, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import CompanionConfigEntry, CompanionData
 from .const import SET_BOUNDS
-from .entity import ThermostatEntity
+from .entity import ThermostatEntity, split_unique_id
 
 SET_KEY = "current_heating_setpoint"
 SUFFIX = "manual_setpoint"
 
 
 class ManualSetpoint(ThermostatEntity, NumberEntity):
-    """The manual-preset setpoint of the trial thermostat."""
+    """The manual-preset setpoint of a thermostat."""
 
     _attr_translation_key = "manual_setpoint"
     _attr_device_class = NumberDeviceClass.TEMPERATURE
@@ -60,19 +61,35 @@ async def async_setup_entry(
     entry: CompanionConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Create the trial thermostat's setpoint once a write route exists for it."""
+    """Create a thermostat's setpoint once its bridge opens the write, and those registered."""
     data = entry.runtime_data
     coordinator = data.coordinator
-    created = False
+    known: set[str] = set()
+
+    def build(key: str) -> ManualSetpoint | None:
+        if key in known:
+            return None
+        known.add(key)
+        return ManualSetpoint(data, key)
+
+    restored: list[ManualSetpoint] = []
+    for registered in er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id):
+        if registered.domain != "number":
+            continue
+        parts = split_unique_id(registered.unique_id, (SUFFIX,))
+        if parts and (entity := build(parts[0])) is not None:
+            restored.append(entity)
+    async_add_entities(restored)
 
     @callback
     def discover() -> None:
-        nonlocal created
-        key = coordinator.trial_thermostat
-        if created or key is None or not coordinator.supports_set(key, SET_KEY):
-            return
-        created = True
-        async_add_entities([ManualSetpoint(data, key)])
+        new = [
+            entity
+            for key in coordinator.thermostats
+            if coordinator.supports_set(key, SET_KEY) and (entity := build(key)) is not None
+        ]
+        if new:
+            async_add_entities(new)
 
     entry.async_on_unload(coordinator.async_add_listener(discover))
     discover()

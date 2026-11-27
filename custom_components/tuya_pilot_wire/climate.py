@@ -1,14 +1,18 @@
-"""Climate entities: one per room, and one per thermostat outside any room. Read only.
+"""Climate entities: one per room, and one per thermostat outside any room.
 
-No write route is open in the Companion yet, so these entities declare **no feature** and offer a
-single HVAC mode, the one the device reports: the interface shows a thermostat and gives nothing
-to press. A service call that tries anyway is refused with an explicit message. Milestone M4
-turns the features on one at a time.
+Controls appear only where a bridge has opened them (`CompanionCoordinator.supports_set`) for
+**every** thermostat the entity stands for: the preset (`program` / `manual`, the raw names of
+the mode sensor) and the target temperature, which is the manual setpoint. Otherwise the entity
+declares no feature and a single HVAC mode, the one reported, and gives nothing to press.
 
-Home Assistant shows a climate's target only together with the control that sets it, so the
-target is given here as the `target_temperature` attribute (and by the "Setpoint" sensor). It is
-the setpoint the thermostat regulates on: that of its current preset when a property holds it,
-and nothing in `program`, whose target is in no data point.
+A command goes to each thermostat in turn (`async_set_many`), each answered by its bridge; the
+entity's state does not move until the bridge publishes what the devices confirmed. A setpoint is
+refused before anything is sent while one thermostat is not in `manual`: in any other preset the
+device does not keep it.
+
+The target is also given as the `target_temperature` attribute (and by the "Setpoint" sensor),
+for when no control is open: the setpoint of the current preset when a property holds it, and
+nothing in `program`, whose target is in no data point.
 """
 
 from __future__ import annotations
@@ -16,24 +20,29 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.climate import (
+    ATTR_HVAC_MODE,
+    ATTR_TARGET_TEMP_HIGH,
+    ATTR_TARGET_TEMP_LOW,
     ClimateEntity,
     ClimateEntityFeature,
     HVACAction,
     HVACMode,
 )
-from homeassistant.const import UnitOfTemperature
+from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import CompanionConfigEntry, CompanionData
-from .const import DOMAIN
+from .const import DOMAIN, SET_BOUNDS, SET_PRESETS
 from .entity import ROOM_PREFIX, RoomEntity, ThermostatEntity, split_unique_id
 from .model import Thermostat
 from .rooms import RoomState
 
 SUFFIX = "climate"
+SETPOINT = "current_heating_setpoint"
+PRESET = "preset"
 _SETPOINTS = (
     "current_heating_setpoint",
     "eco_temperature",
@@ -61,14 +70,15 @@ def _hvac_action(mode: HVACMode | None, heating: bool | None) -> HVACAction | No
     return HVACAction.HEATING if heating else HVACAction.IDLE
 
 
-class _ReadOnlyClimate(ClimateEntity):
-    """What the room and thermostat climates share: no feature, no command."""
+class _CompanionClimate(ClimateEntity):
+    """What the room and thermostat climates share: controls only where the bridge opened them."""
 
+    _data: CompanionData  # set by the thermostat or room base entity
     _attr_name = None
     _attr_translation_key = "thermostat"
-    _attr_supported_features = ClimateEntityFeature(0)
-    # Home Assistant 2026.11 renamed the unit and current-temperature members (`native_…`) and
-    # warns about the former names; earlier versions know only those.
+    _attr_min_temp, _attr_max_temp, _attr_target_temperature_step = SET_BOUNDS[SETPOINT]
+    # Home Assistant 2026.11 renamed the unit and temperature members (`native_…`) and warns
+    # about the former names; earlier versions know only those.
     if _NATIVE_NAMES:
         _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
     else:
@@ -78,6 +88,25 @@ class _ReadOnlyClimate(ClimateEntity):
     def _source(self) -> Thermostat | RoomState | None:
         """The thermostat or room read, or None when it is not usable."""
         raise NotImplementedError
+
+    @property
+    def _members(self) -> list[str]:
+        """Keys of the thermostats a command goes to."""
+        raise NotImplementedError
+
+    def _open(self, set_key: str) -> bool:
+        members = self._members
+        coordinator = self._data.coordinator
+        return bool(members) and all(coordinator.supports_set(key, set_key) for key in members)
+
+    @property
+    def supported_features(self) -> ClimateEntityFeature:
+        features = ClimateEntityFeature(0)
+        if self._open(PRESET):
+            features |= ClimateEntityFeature.PRESET_MODE
+        if self._open(SETPOINT):
+            features |= ClimateEntityFeature.TARGET_TEMPERATURE
+        return features
 
     @property
     def available(self) -> bool:
@@ -100,20 +129,55 @@ class _ReadOnlyClimate(ClimateEntity):
     def hvac_action(self) -> HVACAction | None:
         return _hvac_action(self.hvac_mode, self._read("heating"))
 
+    @property
+    def preset_modes(self) -> list[str] | None:
+        return list(SET_PRESETS) if self._open(PRESET) else None
+
+    @property
+    def preset_mode(self) -> str | None:
+        """The members' common preset, when it is one that can be chosen here."""
+        if not self._open(PRESET):
+            return None
+        preset = self._read("preset")
+        return preset if preset in SET_PRESETS else None
+
     def _local_temperature(self) -> float | None:
         return self._read("local_temperature")
 
+    def _target_temperature(self) -> float | None:
+        return self._read("target_temperature") if self._open(SETPOINT) else None
+
     if _NATIVE_NAMES:
         native_current_temperature = property(_local_temperature)
+        native_target_temperature = property(_target_temperature)
     else:
         current_temperature = property(_local_temperature)
+        target_temperature = property(_target_temperature)
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
-        """Refuse: no write route is open."""
+        """Refuse: on / off is not opened in this version."""
         raise ServiceValidationError(translation_domain=DOMAIN, translation_key="no_write_route")
 
+    async def async_set_preset_mode(self, preset_mode: str) -> None:
+        """WRITE. The preset, to every member; the state follows the devices' confirmation."""
+        await self._data.coordinator.async_set_many(self._members, PRESET, preset_mode)
 
-class ThermostatClimate(ThermostatEntity, _ReadOnlyClimate):
+    async def async_set_temperature(self, **kwargs: Any) -> None:
+        """WRITE. The manual setpoint, to every member, all of which must be in `manual`."""
+        if kwargs.get(ATTR_TEMPERATURE) is None or any(
+            kwargs.get(name) is not None
+            for name in (ATTR_HVAC_MODE, ATTR_TARGET_TEMP_LOW, ATTR_TARGET_TEMP_HIGH)
+        ):
+            # A range or an HVAC mode with the temperature: no route for either.
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="no_write_route"
+            )
+        await self._data.coordinator.async_set_many(
+            self._members, SETPOINT, float(kwargs[ATTR_TEMPERATURE])
+        )
+
+
+class ThermostatClimate(ThermostatEntity, _CompanionClimate):
     """The climate of a thermostat that belongs to no room."""
 
     def __init__(self, data: CompanionData, key: str) -> None:
@@ -122,6 +186,10 @@ class ThermostatClimate(ThermostatEntity, _ReadOnlyClimate):
     @property
     def _source(self) -> Thermostat | None:
         return self.thermostat
+
+    @property
+    def _members(self) -> list[str]:
+        return [self._key]
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
@@ -138,7 +206,7 @@ class ThermostatClimate(ThermostatEntity, _ReadOnlyClimate):
         }
 
 
-class RoomClimate(RoomEntity, _ReadOnlyClimate):
+class RoomClimate(RoomEntity, _CompanionClimate):
     """The climate of a room."""
 
     def __init__(self, data: CompanionData, room_id: str) -> None:
@@ -147,6 +215,11 @@ class RoomClimate(RoomEntity, _ReadOnlyClimate):
     @property
     def _source(self) -> RoomState | None:
         return self.room_state
+
+    @property
+    def _members(self) -> list[str]:
+        room = self._data.store.rooms.get(self._room_id)
+        return list(room.members) if room is not None else []
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:

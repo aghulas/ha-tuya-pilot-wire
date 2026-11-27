@@ -14,18 +14,25 @@ PLATFORMS = (Platform.BINARY_SENSOR, Platform.CLIMATE, Platform.NUMBER, Platform
 SUPPORTED_PRODUCT_IDS = frozenset({"fu1bfwza"})
 ZIGBEE_MODEL_ID = "TS0601"
 
-# `/set` keys the Companion is allowed to publish to any thermostat. Empty: no write is proven
-# through the Companion yet (milestone M4 opens them one at a time, each after its trial).
-OPEN_SET_KEYS: frozenset[str] = frozenset()
+# `/set` keys the Companion knows how to build and check. None is open by the Companion itself:
+# a key is published to a thermostat only while that thermostat's bridge announces it open for
+# it (`bridge/info`: `read_only: false`, the key in `writes.keys`, the thermostat in
+# `writes.devices`). The bridge holds the owner's designation and the supervised trials
+# (docs/companion.md, "Writes").
+SET_KEYS: frozenset[str] = frozenset({"current_heating_setpoint", "preset"})
 
-# `/set` keys under supervised trial: publishable to **one** thermostat only, the one the owner
-# designates in the options (`CONF_TRIAL_THERMOSTAT`), and only while its bridge says it is not
-# read only. A key moves to `OPEN_SET_KEYS` in the change that records its trial.
-TRIAL_SET_KEYS: frozenset[str] = frozenset({"current_heating_setpoint"})
-CONF_TRIAL_THERMOSTAT = "trial_thermostat"
+# Presets the Companion may write: the two the bridge accepts. `eco`, `holiday` and `antifrost`
+# are read, never written.
+SET_PRESETS: tuple[str, ...] = ("program", "manual")
 
-# Bounds and step of each writable key, checked before anything is published (docs/scope.md).
-SET_BOUNDS: dict[str, tuple[float, float, float]] = {"current_heating_setpoint": (5.0, 40.0, 0.5)}
+# Bounds and step of each numeric key, checked before anything is published. The device takes
+# 5 to 40 °C by 0.5; the bridge adds a 30 °C ceiling, kept here so that nothing is offered that
+# the bridge would refuse.
+SET_BOUNDS: dict[str, tuple[float, float, float]] = {"current_heating_setpoint": (5.0, 30.0, 0.5)}
+
+# Option of versions 0.2.x (a single thermostat designated for write trials), dropped by the
+# entry migration to 1.2: the bridge now says which thermostats a write is open for.
+LEGACY_CONF_TRIAL_THERMOSTAT = "trial_thermostat"
 
 # How long the bridge has to answer a command (it writes, then reads the device back).
 SET_TIMEOUT = 45.0

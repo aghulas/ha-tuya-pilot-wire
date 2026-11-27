@@ -24,8 +24,7 @@
           "bridges": "Ponts",
           "add_room": "Ajouter une pièce",
           "edit_room": "Modifier une pièce",
-          "delete_room": "Supprimer une pièce",
-          "trial": "Essai d'écriture"
+          "delete_room": "Supprimer une pièce"
         }
       },
       "bridges": {
@@ -62,13 +61,6 @@
         "description": "Les thermostats de la pièce restent, chacun avec sa propre entité thermostat. Rien n'est envoyé aux appareils.",
         "data": {
           "room": "Pièce"
-        }
-      },
-      "trial": {
-        "title": "Essai d'écriture supervisé",
-        "description": "Désignez le seul thermostat auquel l'écriture à l'essai peut s'adresser : sa consigne manuelle. La commande n'apparaît que lorsque son pont accepte les écritures. Choisissez « — » pour la refermer. Un essai se fait avec l'accord du propriétaire sur l'opération exacte et se consigne dans docs/validation.",
-        "data": {
-          "trial_thermostat": "Thermostat d'essai"
         }
       }
     },
@@ -119,6 +111,13 @@
           },
           "target_temperature": {
             "name": "Consigne"
+          },
+          "preset_mode": {
+            "name": "Mode",
+            "state": {
+              "program": "Programme",
+              "manual": "Manuel"
+            }
           }
         }
       }
@@ -173,7 +172,7 @@
   },
   "exceptions": {
     "no_write_route": {
-      "message": "Ce thermostat est en lecture seule pour l'instant : aucune route d'écriture n'est ouverte dans la Companion."
+      "message": "Aucune voie d'écriture n'est ouverte pour cette opération."
     },
     "not_loaded": {
       "message": "La Companion Tuya Pilot Wire n'est pas chargée."
@@ -194,7 +193,7 @@
       "message": "Un thermostat appartient déjà à la pièce « {room} »."
     },
     "thermostat_unavailable": {
-      "message": "Ce thermostat ne répond pas : rien n'a été envoyé."
+      "message": "Ne répondent pas : {thermostats}. Rien n'a été envoyé."
     },
     "value_out_of_bounds": {
       "message": "La valeur doit être comprise entre {low} et {high}, par pas de {step} : rien n'a été envoyé."
@@ -204,6 +203,18 @@
     },
     "set_refused": {
       "message": "Le pont a refusé la commande : {error}"
+    },
+    "write_closed": {
+      "message": "Le pont n'ouvre pas {key} pour : {thermostats}. Rien n'a été envoyé."
+    },
+    "not_in_manual": {
+      "message": "Une consigne ne s'écrit qu'en mode manuel, et ces thermostats n'y sont pas : {thermostats}. Passez d'abord le mode en manuel. Rien n'a été envoyé."
+    },
+    "preset_not_writable": {
+      "message": "Le mode « {preset} » ne peut pas être écrit ; la Companion écrit {presets}. Rien n'a été envoyé."
+    },
+    "set_not_confirmed": {
+      "message": "Non confirmé par le pont : {failed}. Confirmé : {confirmed}. L'état affiché est celui que les appareils ont confirmé."
     }
   },
   "services": {

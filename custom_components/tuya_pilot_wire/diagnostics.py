@@ -13,7 +13,7 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 
 from . import CompanionConfigEntry
-from .const import OPEN_SET_KEYS, TRIAL_SET_KEYS
+from .const import SET_KEYS, SET_PRESETS
 from .rooms import RoomState
 
 TO_REDACT = {
@@ -47,14 +47,38 @@ TO_REDACT = {
 }
 
 
+def _info(info: dict[str, Any], names: dict[str, str]) -> dict[str, Any]:
+    """A bridge's `bridge/info`, redacted, its `writes` naming thermostats by their number."""
+    kept = async_redact_data({k: v for k, v in info.items() if k != "writes"}, TO_REDACT)
+    writes = info.get("writes")
+    if isinstance(writes, dict):
+        writes = dict(writes)
+        if isinstance(writes.get("device"), str):
+            writes["device"] = names.get(writes["device"], "unknown")
+        if isinstance(writes.get("devices"), list):
+            writes["devices"] = [
+                names.get(name, "unknown") if isinstance(name, str) else "unknown"
+                for name in writes["devices"]
+            ]
+        if isinstance(writes.get("closed"), str):
+            # A reason may quote a thermostat's name.
+            for name, ref in sorted(names.items(), key=lambda item: -len(item[0])):
+                writes["closed"] = writes["closed"].replace(name, ref)
+        # `device` is now a number, not a name: the rest is redacted as everywhere.
+        kept["writes"] = async_redact_data(writes, TO_REDACT - {"device"})
+    return kept
+
+
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: CompanionConfigEntry
 ) -> dict[str, Any]:
     """Diagnostics of the entry."""
     coordinator = entry.runtime_data.coordinator
     store = entry.runtime_data.store
-    trial = coordinator.trial_thermostat
     refs = {key: f"thermostat_{index}" for index, key in enumerate(coordinator.thermostats, 1)}
+    names = {
+        thermostat.friendly_name: refs[key] for key, thermostat in coordinator.thermostats.items()
+    }
 
     thermostats = [
         {
@@ -94,13 +118,18 @@ async def async_get_config_entry_diagnostics(
 
     return {
         "prefixes": list(coordinator.prefixes),
-        "open_set_keys": sorted(OPEN_SET_KEYS),
-        "trial_set_keys": sorted(TRIAL_SET_KEYS),
-        "trial_thermostat": refs.get(trial, "unknown") if trial else None,
+        "set_keys": sorted(SET_KEYS),
+        "set_presets": list(SET_PRESETS),
         "bridges": {
             prefix: {
                 "online": coordinator.bridge_online.get(prefix),
-                "info": async_redact_data(coordinator.bridge_info.get(prefix, {}), TO_REDACT),
+                "info": _info(coordinator.bridge_info.get(prefix, {}), names),
+                "open_for": sorted(
+                    refs[key]
+                    for key in coordinator.thermostats
+                    if coordinator.thermostats[key].prefix == prefix
+                    and any(coordinator.supports_set(key, set_key) for set_key in SET_KEYS)
+                ),
             }
             for prefix in coordinator.prefixes
         },

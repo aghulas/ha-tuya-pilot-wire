@@ -3,9 +3,10 @@
 For each configured prefix it reads `bridge/state`, `bridge/info`, `bridge/devices`, the state
 topic of each thermostat and its `availability`. The read side needs no request to the bridge.
 
-It publishes one thing, and only when `supports_set` allows it: a `/set` command (`async_set`).
-A command never changes the state held here; the state changes when the bridge publishes what
-the device confirmed.
+It publishes one thing, and only when `supports_set` allows it: `/set` commands
+(`async_set_many`), one thermostat after the other, each answered by the bridge. A command never
+changes the state held here; the state changes when the bridge publishes what the device
+confirmed.
 
 Reading rules, all on the side of "an entity never lies":
 
@@ -29,8 +30,9 @@ from homeassistant.components import mqtt
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
-from .const import DOMAIN, OPEN_SET_KEYS, SET_BOUNDS, SET_TIMEOUT, TRIAL_SET_KEYS
+from .const import DOMAIN, SET_BOUNDS, SET_KEYS, SET_PRESETS, SET_TIMEOUT
 from .model import (
+    PRESET_MANUAL,
     Thermostat,
     descriptor_identity,
     is_thermostat,
@@ -40,7 +42,15 @@ from .model import (
 
 # What is kept of `bridge/info`: versions and channel states. The rest (a Zigbee2MQTT `config`
 # block, for one) can hold secrets and is of no use here.
-INFO_KEYS = ("version", "commit", "contract", "contract_version", "channels", "read_only")
+INFO_KEYS = (
+    "version",
+    "commit",
+    "contract",
+    "contract_version",
+    "channels",
+    "read_only",
+    "writes",
+)
 
 # How long after a coordinator stopped its fleet may still be handed to its successor (seconds).
 HANDOVER_MAX_AGE = 5.0
@@ -81,12 +91,10 @@ class CompanionCoordinator:
         hass: HomeAssistant,
         prefixes: list[str] | tuple[str, ...],
         resolve_key: KeyResolver,
-        trial_thermostat: str | None = None,
     ) -> None:
         self.hass = hass
         self.prefixes: tuple[str, ...] = tuple(dict.fromkeys(prefixes))
         self._resolve_key = resolve_key
-        self.trial_thermostat = trial_thermostat or None
         self._pending: dict[str, asyncio.Future[dict[str, Any]]] = {}
         self.thermostats: dict[str, Thermostat] = {}
         self.bridge_online: dict[str, bool | None] = dict.fromkeys(self.prefixes)
@@ -175,37 +183,58 @@ class CompanionCoordinator:
         """The thermostat when it is usable, else None."""
         return self.thermostats.get(key) if self.available(key) else None
 
+    def open_writes(self, prefix: str) -> tuple[frozenset[str], frozenset[str]]:
+        """``(keys, friendly names)`` the bridge of ``prefix`` announces open; empty when closed.
+
+        Open means `read_only` is `false` in its `bridge/info`, and then `writes.keys` and
+        `writes.devices` say what and for whom (contract version 5). A version-4 bridge names a
+        single `writes.device`, read as a list of one.
+        """
+        info = self.bridge_info.get(prefix, {})
+        writes = info.get("writes")
+        if info.get("read_only") is not False or not isinstance(writes, dict):
+            return frozenset(), frozenset()
+        keys = writes.get("keys")
+        devices = writes.get("devices")
+        if devices is None and isinstance(writes.get("device"), str):
+            devices = [writes["device"]]
+        if not isinstance(keys, list) or not isinstance(devices, list):
+            return frozenset(), frozenset()
+        return (
+            frozenset(k for k in keys if isinstance(k, str)),
+            frozenset(d for d in devices if isinstance(d, str)),
+        )
+
     def supports_set(self, key: str, set_key: str) -> bool:
         """True when the Companion may publish ``set_key`` to this thermostat.
 
-        The key must be open for every thermostat, or under trial and this thermostat the one
-        designated for trials; and the thermostat's bridge must have said it is not read only.
+        The Companion must know the key, and the thermostat's bridge must announce it open for
+        this thermostat (`open_writes`).
         """
         thermostat = self.thermostats.get(key)
-        if thermostat is None:
+        if thermostat is None or set_key not in SET_KEYS:
             return False
-        allowed = set_key in OPEN_SET_KEYS or (
-            set_key in TRIAL_SET_KEYS and key == self.trial_thermostat
-        )
-        return allowed and self.bridge_info.get(thermostat.prefix, {}).get("read_only") is False
+        keys, devices = self.open_writes(thermostat.prefix)
+        return set_key in keys and thermostat.friendly_name in devices
 
-    async def async_set(self, key: str, set_key: str, value: float) -> None:
-        """WRITE. Publish one ``/set`` key to one thermostat and wait for the bridge's answer.
+    def name_of(self, key: str) -> str:
+        """The bridge name of a thermostat, or its key when no bridge lists it."""
+        thermostat = self.thermostats.get(key)
+        return thermostat.friendly_name if thermostat is not None else key
 
-        Refused before anything is published when no route is open for this key on this
-        thermostat, when the thermostat is not usable, or when the value is outside the key's
-        bounds or off its step. Raises when the bridge refuses or does not answer. Never touches
-        the state held here: the bridge publishes it once the device confirmed.
-        """
-        if not self.supports_set(key, set_key):
-            raise ServiceValidationError(
-                translation_domain=DOMAIN, translation_key="no_write_route"
-            )
-        thermostat = self.get(key)
-        if thermostat is None:
-            raise ServiceValidationError(
-                translation_domain=DOMAIN, translation_key="thermostat_unavailable"
-            )
+    @staticmethod
+    def _check_value(set_key: str, value: Any) -> None:
+        if set_key == "preset":
+            if value not in SET_PRESETS:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="preset_not_writable",
+                    translation_placeholders={
+                        "preset": str(value),
+                        "presets": ", ".join(SET_PRESETS),
+                    },
+                )
+            return
         low, high, step = SET_BOUNDS[set_key]
         steps = (value - low) / step
         if not low <= value <= high or abs(steps - round(steps)) > 1e-6:
@@ -215,6 +244,94 @@ class CompanionCoordinator:
                 translation_placeholders={"low": str(low), "high": str(high), "step": str(step)},
             )
 
+    def _check(self, keys: list[str], set_key: str, value: Any) -> list[Thermostat]:
+        """Every refusal that needs no bridge, for all thermostats at once. Raises, or returns
+        the thermostats to write to, in order."""
+        if not keys:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="no_write_route"
+            )
+        closed = [key for key in keys if not self.supports_set(key, set_key)]
+        if closed:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="write_closed",
+                translation_placeholders={
+                    "key": set_key,
+                    "thermostats": ", ".join(self.name_of(key) for key in closed),
+                },
+            )
+        unusable = [key for key in keys if self.get(key) is None]
+        if unusable:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="thermostat_unavailable",
+                translation_placeholders={
+                    "thermostats": ", ".join(self.name_of(key) for key in unusable)
+                },
+            )
+        self._check_value(set_key, value)
+        thermostats = [self.thermostats[key] for key in keys]
+        if set_key == "current_heating_setpoint":
+            # In any other preset the device does not keep a written setpoint (contract §4).
+            elsewhere = [t for t in thermostats if t.preset != PRESET_MANUAL]
+            if elsewhere:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="not_in_manual",
+                    translation_placeholders={
+                        "thermostats": ", ".join(
+                            f"{t.friendly_name} ({t.preset or 'unknown'})" for t in elsewhere
+                        )
+                    },
+                )
+        return thermostats
+
+    async def async_set(self, key: str, set_key: str, value: Any) -> None:
+        """WRITE. One ``/set`` key to one thermostat; see `async_set_many`.
+
+        The bridge's refusal or silence is raised as is (`set_refused`, `set_no_answer`).
+        """
+        (thermostat,) = self._check([key], set_key, value)
+        await self._send(thermostat, set_key, value)
+
+    async def async_set_many(self, keys: list[str], set_key: str, value: Any) -> None:
+        """WRITE. Publish one ``/set`` key to several thermostats and wait for each answer.
+
+        Refused before anything is published when the bridge does not announce the key open for
+        **every** thermostat, when one is not usable, when the value is outside the key's bounds,
+        or, for the manual setpoint, when one thermostat is not in `manual`. Then one command per
+        thermostat, one after the other (the bridge writes and reads back one device at a time),
+        each with its own transaction and up to ``SET_TIMEOUT`` for its answer. A thermostat
+        that is refused or not confirmed does not stop the others; the call then fails naming
+        every thermostat not confirmed. Never touches the state held here.
+        """
+        thermostats = self._check(keys, set_key, value)
+        if len(thermostats) == 1:
+            await self._send(thermostats[0], set_key, value)
+            return
+        failed: list[str] = []
+        confirmed: list[str] = []
+        for thermostat in thermostats:
+            try:
+                await self._send(thermostat, set_key, value)
+            except HomeAssistantError as err:
+                reason = (err.translation_placeholders or {}).get("error") or "no answer"
+                failed.append(f"{thermostat.friendly_name} ({reason})")
+            else:
+                confirmed.append(thermostat.friendly_name)
+        if failed:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="set_not_confirmed",
+                translation_placeholders={
+                    "failed": "; ".join(failed),
+                    "confirmed": ", ".join(confirmed) or "none",
+                },
+            )
+
+    async def _send(self, thermostat: Thermostat, set_key: str, value: Any) -> None:
+        """Publish one command and wait for the bridge's answer. Raises unless confirmed."""
         transaction = uuid.uuid4().hex
         answer: asyncio.Future[dict[str, Any]] = self.hass.loop.create_future()
         self._pending[transaction] = answer
@@ -234,11 +351,17 @@ class CompanionCoordinator:
             ) from err
         finally:
             self._pending.pop(transaction, None)
-        if response.get("status") != "ok":
+        data = response.get("data")
+        results = data.get("results") if isinstance(data, dict) else None
+        unconfirmed = isinstance(results, list) and any(
+            isinstance(result, dict) and result.get("confirmed") is False for result in results
+        )
+        if response.get("status") != "ok" or unconfirmed:
+            error = response.get("error") or ("not confirmed" if unconfirmed else "no reason given")
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="set_refused",
-                translation_placeholders={"error": str(response.get("error") or "no reason given")},
+                translation_placeholders={"error": str(error)},
             )
 
     # -- ingestion ---------------------------------------------------------------------------

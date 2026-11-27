@@ -2,8 +2,10 @@
 
 Status: the read side is built, tested against synthetic messages that follow the
 [MQTT contract](https://github.com/aghulas/tuyapilot2mqtt/blob/main/docs/mqtt-contract.md), and
-runs on the reference install. **No write is open**: `const.OPEN_SET_KEYS` is empty. One write is
-built and closed, for its supervised trial: see "Writes" below.
+runs on the reference install. Since v0.3.0 two writes are built, the preset (`program` /
+`manual`) and the manual setpoint, on room and thermostat climates. **The Companion opens none by
+itself**: each is offered for a thermostat only while its bridge announces it open for that
+thermostat (see "Writes" below).
 
 ## What it reads
 
@@ -49,7 +51,8 @@ Per thermostat (device named after its bridge name):
 
 | Entity | Source |
 |---|---|
-| `climate` (only while the thermostat is in no room) | `system_mode`, `running_state`, `local_temperature`; attributes `preset`, `target_temperature` and the setpoints read |
+| `climate` (only while the thermostat is in no room) | `system_mode`, `running_state`, `local_temperature`; attributes `preset`, `target_temperature` and the setpoints read; preset and setpoint controls where the bridge opens them |
+| `number` "Manual setpoint" (in a room or not) | `current_heating_setpoint`; exists once the bridge has opened the setpoint for the thermostat, unavailable while it is closed |
 | `sensor` temperature, setpoint, mode | `local_temperature`; setpoint of the current preset; `preset` |
 | `sensor` power, energy, voltage, current | `power`, `energy` (kWh, `total_increasing`, usable in the Energy dashboard), `voltage`, `current` |
 | `binary_sensor` heating, window, fault | `running_state`, `window_open`, `fault` (names in the `faults` attribute) |
@@ -58,10 +61,10 @@ The **setpoint** is the one the thermostat regulates on: `current_heating_setpoi
 `eco_temperature`, `holiday_temperature` or `antifrost_temperature` in those presets, and nothing
 in `program` (its target is in no data point) or when off.
 
-The `climate` declares no feature and lists a single HVAC mode, the reported one, so the interface
-offers no control; a service call that tries anyway is refused. Home Assistant shows a climate's
-target only with the control that sets it, hence the `target_temperature` attribute and the
-setpoint sensor.
+The `climate` lists a single HVAC mode, the reported one: on / off is not written. Its other
+controls follow the bridge (see "Writes"); with none open it declares no feature and the
+interface offers nothing to press. Home Assistant shows a climate's target only with the control
+that sets it, hence the `target_temperature` attribute and the setpoint sensor, which stay.
 
 ## Rooms
 
@@ -92,28 +95,52 @@ by the room's.
 
 ## Writes
 
-One at a time, each opened by its own supervised trial ([`architecture.md`](architecture.md)).
+| Key | Values | Offered on |
+|---|---|---|
+| `preset` | `program`, `manual` (the raw names of the mode sensor; `eco`, `holiday`, `antifrost` are read, never written) | `climate.set_preset_mode` |
+| `current_heating_setpoint` | 5–30 °C, step 0.5 (the device takes up to 40; the bridge stops at 30) | `climate.set_temperature`, the "Manual setpoint" `number` |
+| everything else (on / off, child lock, schedule…) | — | not built |
 
-| Key | State |
-|---|---|
-| `current_heating_setpoint` (manual setpoint) | **under trial**, closed by default. [Protocol](validation/trial-1-manual-setpoint-protocol.md) |
-| everything else | not built |
+**Who opens a write: the bridge.** `const.SET_KEYS` is what the Companion can build and check; a
+key is published to a thermostat only while that thermostat's bridge publishes, in
+`bridge/info` (contract version 5):
 
-A key under trial can be published to **one** thermostat only: the one designated in the options
-(Configure → "Write trial"), and only while its bridge publishes `read_only: false` in
-`bridge/info`. That thermostat then gets a "Manual setpoint" `number`; no other thermostat, and no
-room, gets a control.
+```json
+"read_only": false,
+"writes": {"enabled": true, "keys": ["current_heating_setpoint", "preset"],
+           "devices": ["<friendly name>", "..."]}
+```
+
+the key in `writes.keys` and the thermostat in `writes.devices`. A version-4 bridge that names a
+single `writes.device` is read as a list of one. Anything else — `read_only` true or absent, no
+`writes`, a malformed one — opens nothing. The owner's designation of the thermostats, and the
+supervised trial of each new write, live on the bridge side; the Companion has no option for it
+(the "Write trial" option of 0.2.x is dropped by the entry migration to 1.2).
+
+**A room** offers a control only when it is open for **every** member; a thermostat outside any
+room, when it is open for it. A control that closes disappears from the climate; the setpoint
+`number` stays, unavailable.
 
 What a write does:
 
-1. checks the route, that the thermostat is usable, and the value (5–40 °C, step 0.5) — a refusal
-   here publishes nothing;
-2. publishes `{"current_heating_setpoint": <value>, "transaction": <id>}` on the thermostat's
-   `/set` topic;
-3. waits up to 45 s for the bridge's answer on `bridge/response/device/set` with the same
-   transaction; an error or no answer fails the service call with the bridge's reason;
-4. changes **nothing** in the state shown: the value moves when the bridge publishes the state
-   the device confirmed.
+1. checks, for every thermostat concerned, before anything is published: the route is open, the
+   thermostat is usable, the value is in bounds (preset: `program` or `manual`), and for a
+   setpoint that the thermostat is in `manual` — in `program` the running schedule slot
+   overwrites a written setpoint, and the other presets do not keep it (contract §4). A refusal
+   here publishes nothing and names the thermostats concerned. To set a room's setpoint, set its
+   preset to `manual` first;
+2. publishes `{"<key>": <value>, "transaction": <id>}` on each thermostat's `/set` topic, **one
+   after the other** (the bridge writes and reads back one device at a time), each with its own
+   transaction;
+3. waits up to 45 s for each answer on `bridge/response/device/set`; `"status": "ok"` with no
+   result `"confirmed": false` is a confirmation. A thermostat refused or not confirmed does not
+   stop the others: the call then fails naming each thermostat not confirmed with the bridge's
+   reason, and those that were;
+4. changes **nothing** in the state shown: the preset and setpoint move when the bridge publishes
+   the state the devices confirmed.
+
+For an automation: `climate.set_preset_mode` (`manual`), then `climate.set_temperature`; back with
+`climate.set_preset_mode` (`program`). A failed call is an error in the automation's trace.
 
 ## Diagnostics
 
