@@ -18,9 +18,9 @@ Four readings over five minutes, six thermostats each, one of them heating two r
 | Value | Against (a) local reader | Against (b) `tuya` integration |
 |---|---|---|
 | Room temperature | identical, 24 / 24 | identical, 24 / 24 |
-| Cumulative energy | identical, 23 / 24; one reading 0.1 kWh ahead (the two readers do not poll at the same second) | not exposed by (b) |
-| Power | within 1 % on the heating thermostats, equal (0 W) on the idle one that reports it | (b) reports 0 W while heating: not comparable |
-| Voltage | within 1 V | not exposed by (b) |
+| Cumulative energy | identical, 22 / 24; twice 0.1 kWh ahead on a heating thermostat (the two readers do not poll at the same second) | not exposed by (b) |
+| Power | within 3 % on the heating thermostats (readings a few seconds apart), equal (0 W) on the idle one that reports it | (b) reports 0 W while heating: not comparable |
+| Voltage | within 3 V | not exposed by (b) |
 | Mode | identical where the bridge read it (3 thermostats of 6) | identical on the same 3 |
 | Heating | identical where the bridge read it (3 of 6) | not exposed by (b) |
 
@@ -45,5 +45,5 @@ reported a disagreement.
 ## Left for the roadmap's "done when"
 
 M3 asks that energy match the previous local reading **over a week**: the two counters are the
-same data point read by two programs, and matched to the tenth on every reading here; the week
+same data point read by two programs, and never differed by more than one tenth here; the week
 runs from this date.
