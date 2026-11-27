@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 from homeassistant.core import HomeAssistant
@@ -37,6 +38,13 @@ STATE: dict[str, Any] = {
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
     """Let Home Assistant load integrations from custom_components."""
+
+
+@pytest.fixture(autouse=True)
+def no_set_spacing() -> Any:
+    """Commands to one thermostat go out at once in tests; the spacing has its own test."""
+    with patch("custom_components.tuya_pilot_wire.coordinator.MIN_SET_INTERVAL", 0.0):
+        yield
 
 
 @pytest.fixture

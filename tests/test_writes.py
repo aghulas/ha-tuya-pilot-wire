@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from collections.abc import Callable
 from typing import Any
 from unittest.mock import patch
@@ -426,6 +427,32 @@ async def test_a_thermostat_outside_any_room(
         )
     assert refused.value.translation_key == "set_refused"
     assert refused.value.translation_placeholders == {"error": "channel offline"}
+
+
+async def test_commands_to_one_thermostat_are_spaced(
+    hass: HomeAssistant, opened: MockConfigEntry, mqtt_mock: Any
+) -> None:
+    """The bridge takes one write per thermostat every 10 s: the second command waits."""
+    with patch("custom_components.tuya_pilot_wire.coordinator.MIN_SET_INTERVAL", 0.3):
+        start = time.monotonic()
+        await run(hass, mqtt_mock, climate_call(hass, "set_preset_mode", B1, preset_mode="manual"))
+        first = time.monotonic() - start
+        await run(hass, mqtt_mock, climate_call(hass, "set_temperature", B1, temperature=19.0))
+        second = time.monotonic() - start
+        # Another thermostat does not wait for B1.
+        await run(
+            hass, mqtt_mock, climate_call(hass, "set_preset_mode", ROOM, preset_mode="manual")
+        )
+        third = time.monotonic() - start - second
+    assert first < 0.3 <= second
+    assert third < 0.3
+    assert [c for _, c in published(mqtt_mock)][:2] == [
+        {"preset": "manual", "transaction": published(mqtt_mock)[0][1]["transaction"]},
+        {
+            "current_heating_setpoint": 19.0,
+            "transaction": published(mqtt_mock)[1][1]["transaction"],
+        },
+    ]
 
 
 async def test_the_setpoint_number(
