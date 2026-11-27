@@ -13,7 +13,8 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.tuya_pilot_wire.const import DOMAIN
+from custom_components.tuya_pilot_wire.const import DATA_HANDOVER, DOMAIN
+from custom_components.tuya_pilot_wire.coordinator import HANDOVER_MAX_AGE, CompanionCoordinator
 
 from .conftest import STATE, TUYA, Z2M, descriptor, fire, publish_bridge, z2m_descriptor
 
@@ -294,10 +295,45 @@ async def test_read_only(hass: HomeAssistant, fleet: MockConfigEntry, mqtt_mock:
     mqtt_mock.async_publish.assert_not_called()
 
 
+async def test_a_reload_keeps_the_fleet(hass: HomeAssistant, fleet: MockConfigEntry) -> None:
+    """The broker does not send retained messages again after a reload: nothing may depend on it."""
+    before = fleet.runtime_data.coordinator
+    assert await hass.config_entries.async_reload(fleet.entry_id)
+    await hass.async_block_till_done()
+    after = fleet.runtime_data.coordinator
+    assert after is not before and list(after.thermostats) == list(before.thermostats)
+    assert state_of(hass, f"climate.{A1}") == HVACMode.HEAT
+    assert state_of(hass, f"sensor.{A1}_energy") == "100.5"
+    # And it listens again: the next message is read.
+    await publish(hass, f"{TUYA}/Thermostat A1", {**STATE, "energy": 100.6})
+    assert state_of(hass, f"sensor.{A1}_energy") == "100.6"
+    assert DATA_HANDOVER not in hass.data
+
+
+async def test_no_hand_over_after_a_long_stop_or_on_other_prefixes(
+    hass: HomeAssistant, fleet: MockConfigEntry
+) -> None:
+    previous = fleet.runtime_data.coordinator
+    assert await hass.config_entries.async_unload(fleet.entry_id)
+    assert hass.data[DATA_HANDOVER] is previous
+
+    other = CompanionCoordinator(hass, [TUYA], lambda dev_id, ieee: dev_id)
+    assert not other.adopt(previous)
+    same = CompanionCoordinator(hass, [Z2M, TUYA], lambda dev_id, ieee: dev_id)
+    never_stopped = CompanionCoordinator(hass, [Z2M, TUYA], lambda dev_id, ieee: dev_id)
+    assert not same.adopt(never_stopped)
+    assert previous.stopped_at is not None
+    previous.stopped_at -= HANDOVER_MAX_AGE + 1
+    assert not same.adopt(previous)
+    assert same.thermostats == {}
+
+
 async def test_entities_come_back_after_a_restart(
     hass: HomeAssistant, fleet: MockConfigEntry
 ) -> None:
-    assert await hass.config_entries.async_reload(fleet.entry_id)
+    assert await hass.config_entries.async_unload(fleet.entry_id)
+    hass.data.pop(DATA_HANDOVER)  # a restart: nothing is handed over
+    assert await hass.config_entries.async_setup(fleet.entry_id)
     await hass.async_block_till_done()
     # Known to the registry, so present at once, and unavailable until the bridge speaks again.
     assert state_of(hass, f"climate.{A1}") == STATE_UNAVAILABLE

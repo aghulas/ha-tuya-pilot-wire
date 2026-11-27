@@ -18,7 +18,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.typing import ConfigType
 
-from .const import CONF_MQTT_PREFIXES, DOMAIN, PLATFORMS
+from .const import CONF_MQTT_PREFIXES, DATA_HANDOVER, DOMAIN, PLATFORMS
 from .coordinator import CompanionCoordinator
 from .entity import ROOM_PREFIX, room_identifier
 from .rooms import CompanionStore
@@ -57,6 +57,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: CompanionConfigEntry) ->
     store = CompanionStore(hass)
     await store.async_load()
     coordinator = CompanionCoordinator(hass, entry_prefixes(entry), store.resolve_key)
+    previous: CompanionCoordinator | None = hass.data.pop(DATA_HANDOVER, None)
+    if previous is not None:
+        coordinator.adopt(previous)
     entry.runtime_data = CompanionData(coordinator, store)
 
     _remove_stale(hass, entry, store)
@@ -70,7 +73,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: CompanionConfigEntry) ->
 async def async_unload_entry(hass: HomeAssistant, entry: CompanionConfigEntry) -> bool:
     """Unload a config entry."""
     await entry.runtime_data.store.async_flush()
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded:
+        # A reload sets the entry up again at once: it starts from this fleet (see `adopt`).
+        hass.data[DATA_HANDOVER] = entry.runtime_data.coordinator
+    return unloaded
 
 
 async def _async_options_updated(hass: HomeAssistant, entry: CompanionConfigEntry) -> None:

@@ -34,6 +34,12 @@ else under a prefix is ignored.
 - **Identity** is the Tuya device id when the bridge gives one, else the IEEE address. When a
   bridge gives both, the pair is remembered: the same thermostat later published by Zigbee2MQTT,
   by IEEE address alone, keeps its entities.
+- **A reload keeps the fleet.** When the entry is reloaded (a room change does it), Home
+  Assistant's MQTT client keeps its broker subscription, so the retained messages are not sent
+  again; the new coordinator therefore starts from the fleet of the one it replaces, if that one
+  stopped less than five seconds ago. After a restart, or a longer stop, it starts empty and the
+  broker's retained messages fill it. (Found on the reference install with v0.1.0: after a room
+  was created, the thermostats stayed unavailable until the bridge's next publication.)
 - Contract draft-0 names (`schedule`, `frost_protection`, `frost_protection_temperature`) are read
   as aliases of the current ones.
 

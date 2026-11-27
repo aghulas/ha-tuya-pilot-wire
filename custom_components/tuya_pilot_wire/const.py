@@ -18,6 +18,9 @@ ZIGBEE_MODEL_ID = "TS0601"
 # (milestone M4 opens them one at a time, each after its supervised trial).
 OPEN_SET_KEYS: frozenset[str] = frozenset()
 
+# `hass.data` key of the coordinator an unloaded entry leaves for the entry set up next.
+DATA_HANDOVER = f"{DOMAIN}_handover"
+
 STORAGE_KEY = f"{DOMAIN}.rooms"
 STORAGE_VERSION = 1
 

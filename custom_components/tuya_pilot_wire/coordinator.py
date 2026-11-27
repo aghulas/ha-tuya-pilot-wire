@@ -16,6 +16,7 @@ Reading rules, all on the side of "an entity never lies":
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -34,6 +35,9 @@ from .model import (
 # What is kept of `bridge/info`: versions and channel states. The rest (a Zigbee2MQTT `config`
 # block, for one) can hold secrets and is of no use here.
 INFO_KEYS = ("version", "commit", "contract", "contract_version", "channels")
+
+# How long after a coordinator stopped its fleet may still be handed to its successor (seconds).
+HANDOVER_MAX_AGE = 5.0
 
 KeyResolver = Callable[[str | None, str | None], str | None]
 
@@ -82,6 +86,7 @@ class CompanionCoordinator:
         self._early: dict[tuple[str, str], dict[str, str | bytes]] = {}
         self._listeners: list[Callable[[], None]] = []
         self._unsubscribe: list[CALLBACK_TYPE] = []
+        self.stopped_at: float | None = None  # monotonic time of the last `async_stop`
 
     # -- listeners ---------------------------------------------------------------------------
 
@@ -116,6 +121,34 @@ class CompanionCoordinator:
         """Unsubscribe from every prefix."""
         while self._unsubscribe:
             self._unsubscribe.pop()()
+        self.stopped_at = time.monotonic()
+
+    def adopt(self, previous: CompanionCoordinator) -> bool:
+        """Start from the fleet of the coordinator this one replaces, when it has just stopped.
+
+        A reload unsubscribes and subscribes again within the same second, and Home Assistant's
+        MQTT client then keeps its broker subscription: the retained messages are **not** sent
+        again. Without this hand-over the fleet would stay empty until each bridge next
+        publishes, which Zigbee2MQTT does for `bridge/devices` only when its device list changes.
+
+        Refused when the prefixes differ, or when the previous coordinator stopped more than
+        ``HANDOVER_MAX_AGE`` seconds ago: what it knew is then too old to show, and after such a
+        gap the subscription is a new one, so the broker does send the retained messages.
+        """
+        stopped_at = previous.stopped_at
+        if (
+            previous.prefixes != self.prefixes
+            or stopped_at is None
+            or time.monotonic() - stopped_at > HANDOVER_MAX_AGE
+        ):
+            return False
+        self.thermostats = previous.thermostats
+        self.bridge_online = previous.bridge_online
+        self.bridge_info = previous.bridge_info
+        self._by_topic = previous._by_topic
+        self._listed = previous._listed
+        self._early = previous._early
+        return True
 
     # -- reading -----------------------------------------------------------------------------
 
