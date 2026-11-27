@@ -30,14 +30,10 @@ from .const import (
     ATTR_ROOM,
     ATTR_THERMOSTATS,
     CONF_MQTT_PREFIXES,
-    CONF_TRIAL_THERMOSTAT,
     DEFAULT_MQTT_PREFIXES,
     DOMAIN,
 )
 from .rooms import RoomError
-
-# Option value meaning "no thermostat is designated for write trials".
-NO_TRIAL = "none"
 
 # One MQTT topic level per prefix: no separator, no wildcard.
 _PREFIX = re.compile(r"^[A-Za-z0-9_\-]+$")
@@ -67,6 +63,8 @@ class TuyaPilotWireConfigFlow(ConfigFlow, domain=DOMAIN):
     """One entry, holding the bridge prefixes."""
 
     VERSION = 1
+    # 1.2 (v0.3.0): the `trial_thermostat` option is gone (`async_migrate_entry`).
+    MINOR_VERSION = 2
 
     @staticmethod
     @callback
@@ -139,7 +137,6 @@ class CompanionOptionsFlow(OptionsFlow):
         options = ["bridges", "add_room"]
         if self._data.store.rooms:
             options += ["edit_room", "delete_room"]
-        options.append("trial")
         return self.async_show_menu(step_id="init", menu_options=options)
 
     async def async_step_bridges(
@@ -162,33 +159,6 @@ class CompanionOptionsFlow(OptionsFlow):
         return self.async_show_form(
             step_id="bridges", data_schema=_prefix_schema(text), errors=errors
         )
-
-    async def async_step_trial(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Designate the single thermostat the supervised write trials may address, or none."""
-        if user_input is not None:
-            options = {**self.config_entry.options}
-            chosen = user_input[CONF_TRIAL_THERMOSTAT]
-            options[CONF_TRIAL_THERMOSTAT] = None if chosen == NO_TRIAL else chosen
-            return self.async_create_entry(data=options)
-        thermostats = self._data.coordinator.thermostats
-        current = self.config_entry.options.get(CONF_TRIAL_THERMOSTAT) or NO_TRIAL
-        keys = list(thermostats)
-        if current != NO_TRIAL and current not in keys:
-            keys.append(current)
-        choices = [SelectOptionDict(value=NO_TRIAL, label="—")] + [
-            SelectOptionDict(
-                value=key, label=thermostats[key].friendly_name if key in thermostats else key
-            )
-            for key in keys
-        ]
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_TRIAL_THERMOSTAT, default=current): SelectSelector(
-                    SelectSelectorConfig(options=choices, mode=SelectSelectorMode.DROPDOWN)
-                )
-            }
-        )
-        return self.async_show_form(step_id="trial", data_schema=schema)
 
     async def async_step_add_room(
         self, user_input: dict[str, Any] | None = None

@@ -34,11 +34,13 @@ and `~/dev/pydanfoss-cloud`. Reuse their patterns; do not import their code.
 ## Where the work stands
 
 M0 done (`docs/device.md`). M3 delivered: the Companion reads (`docs/companion.md`) and runs on
-the reference install (record in `docs/validation/`). M4 started: **one write is built and
-closed**, the manual setpoint, publishable only to the thermostat designated for its trial and
-only when its bridge is not read only (`TRIAL_SET_KEYS`, `CONF_TRIAL_THERMOSTAT`). Its protocol
-is `docs/validation/trial-1-manual-setpoint-protocol.md`; it has **not been run**.
-`OPEN_SET_KEYS` stays empty until the change that records a passed trial.
+the reference install (record in `docs/validation/`). M4: since v0.3.0 the Companion builds two
+writes, the preset (`program` / `manual`) and the manual setpoint, on room and thermostat
+climates (fan-out, one confirmed command per member) and a per-thermostat `number`. **It opens
+none by itself** (`SET_KEYS` is what it can build): a key reaches a thermostat only while its
+bridge announces it in `bridge/info` (`read_only: false`, `writes.keys`, `writes.devices`). The
+designation and the supervised trials live on the bridge (`~/dev/tuyapilot2mqtt`); the trial
+protocol is `docs/validation/trial-1-manual-setpoint-protocol.md`.
 
 ## Quality
 

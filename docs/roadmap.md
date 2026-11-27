@@ -25,6 +25,9 @@ supervised trial ([`architecture.md`](architecture.md), "Rule for adding a route
 - **M4** — started 2026-11-27: the manual setpoint is built in the Companion, closed, for a
   trial on one designated thermostat ([protocol](validation/trial-1-manual-setpoint-protocol.md)).
   Not run: it waits for the bridge's sharing channel and write gate, and the owner's agreement.
+  Companion v0.3.0 (2026-11-27): room writes, preset (`program` / `manual`) and manual setpoint,
+  fanned out to every member and confirmed one by one; offered only where the bridge announces
+  them open (`bridge/info.writes`, contract version 5). The trial option moves to the bridge.
 
 ## Order of work
 

@@ -1,9 +1,9 @@
 """Tuya Pilot Wire Companion: pilot-wire thermostats read from MQTT bridges.
 
 The entry subscribes to the configured bridge prefixes, keeps rooms in Home Assistant storage and
-creates `climate`, `sensor` and `binary_sensor` entities, all read only. Writes arrive with
-milestone M4, one route at a time (docs/roadmap.md): the only one built is the manual setpoint,
-as a `number` on the single thermostat designated for its supervised trial.
+creates `climate`, `sensor`, `binary_sensor` and `number` entities. Writes (milestone M4) are the
+preset (`program` / `manual`) and the manual setpoint, offered only where a bridge announces them
+open (`bridge/info.writes`), on the room and thermostat climates and a per-thermostat `number`.
 """
 
 from __future__ import annotations
@@ -19,7 +19,13 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.typing import ConfigType
 
-from .const import CONF_MQTT_PREFIXES, CONF_TRIAL_THERMOSTAT, DATA_HANDOVER, DOMAIN, PLATFORMS
+from .const import (
+    CONF_MQTT_PREFIXES,
+    DATA_HANDOVER,
+    DOMAIN,
+    LEGACY_CONF_TRIAL_THERMOSTAT,
+    PLATFORMS,
+)
 from .coordinator import CompanionCoordinator
 from .entity import ROOM_PREFIX, room_identifier
 from .rooms import CompanionStore
@@ -57,9 +63,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: CompanionConfigEntry) ->
 
     store = CompanionStore(hass)
     await store.async_load()
-    coordinator = CompanionCoordinator(
-        hass, entry_prefixes(entry), store.resolve_key, entry.options.get(CONF_TRIAL_THERMOSTAT)
-    )
+    coordinator = CompanionCoordinator(hass, entry_prefixes(entry), store.resolve_key)
     previous: CompanionCoordinator | None = hass.data.pop(DATA_HANDOVER, None)
     if previous is not None:
         coordinator.adopt(previous)
@@ -70,6 +74,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: CompanionConfigEntry) ->
     await coordinator.async_start()
     entry.async_on_unload(coordinator.async_stop)
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
+    return True
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """1.1 → 1.2: drop the single trial thermostat of 0.2.x; the bridge now says who is open."""
+    if entry.version > 1:
+        return False
+    if entry.minor_version < 2:
+        options = {k: v for k, v in entry.options.items() if k != LEGACY_CONF_TRIAL_THERMOSTAT}
+        hass.config_entries.async_update_entry(entry, options=options, minor_version=2)
     return True
 
 
@@ -102,11 +116,6 @@ def _remove_stale(hass: HomeAssistant, entry: ConfigEntry, store: CompanionStore
             ):
                 devices.async_remove_device(device.id)
     entities = er.async_get(hass)
-    # A write control exists only for the thermostat designated for trials.
-    trial = entry.options.get(CONF_TRIAL_THERMOSTAT)
-    for registered in er.async_entries_for_config_entry(entities, entry.entry_id):
-        if registered.domain == "number" and registered.unique_id != f"{trial}_manual_setpoint":
-            entities.async_remove(registered.entity_id)
     for room in store.rooms.values():
         for key in room.members:
             entity_id = entities.async_get_entity_id("climate", DOMAIN, f"{key}_climate")

@@ -24,8 +24,7 @@
           "bridges": "Bridges",
           "add_room": "Add a room",
           "edit_room": "Edit a room",
-          "delete_room": "Delete a room",
-          "trial": "Write trial"
+          "delete_room": "Delete a room"
         }
       },
       "bridges": {
@@ -62,13 +61,6 @@
         "description": "The room's thermostats stay, each with its own thermostat entity. Nothing is sent to the devices.",
         "data": {
           "room": "Room"
-        }
-      },
-      "trial": {
-        "title": "Supervised write trial",
-        "description": "Designate the single thermostat the write under trial may address: its manual setpoint. The control appears only once its bridge accepts writes. Choose “—” to close it again. A trial is run with the owner's agreement on the exact operation and recorded in docs/validation.",
-        "data": {
-          "trial_thermostat": "Trial thermostat"
         }
       }
     },
@@ -119,6 +111,13 @@
           },
           "target_temperature": {
             "name": "Setpoint"
+          },
+          "preset_mode": {
+            "name": "Mode",
+            "state": {
+              "program": "Schedule",
+              "manual": "Manual"
+            }
           }
         }
       }
@@ -173,7 +172,7 @@
   },
   "exceptions": {
     "no_write_route": {
-      "message": "This thermostat is read only for now: no write route is open in the Companion."
+      "message": "No write route is open for this operation."
     },
     "not_loaded": {
       "message": "The Tuya Pilot Wire Companion is not loaded."
@@ -194,7 +193,7 @@
       "message": "A thermostat already belongs to the room \"{room}\"."
     },
     "thermostat_unavailable": {
-      "message": "This thermostat is not responding: nothing was sent."
+      "message": "Not responding: {thermostats}. Nothing was sent."
     },
     "value_out_of_bounds": {
       "message": "The value must be between {low} and {high}, in steps of {step}: nothing was sent."
@@ -204,6 +203,18 @@
     },
     "set_refused": {
       "message": "The bridge refused the command: {error}"
+    },
+    "write_closed": {
+      "message": "The bridge does not open {key} for: {thermostats}. Nothing was sent."
+    },
+    "not_in_manual": {
+      "message": "A setpoint is written only in manual mode, and these thermostats are not in it: {thermostats}. Set the preset to manual first. Nothing was sent."
+    },
+    "preset_not_writable": {
+      "message": "The preset \"{preset}\" cannot be written; the Companion writes {presets}. Nothing was sent."
+    },
+    "set_not_confirmed": {
+      "message": "Not confirmed by the bridge: {failed}. Confirmed: {confirmed}. The state shown is what the devices confirmed."
     }
   },
   "services": {

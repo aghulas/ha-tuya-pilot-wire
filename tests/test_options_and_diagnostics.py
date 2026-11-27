@@ -30,10 +30,10 @@ async def step(hass: HomeAssistant, entry: MockConfigEntry, *inputs: dict[str, A
 async def test_menu_follows_the_rooms(hass: HomeAssistant, fleet: MockConfigEntry) -> None:
     result = await step(hass, fleet)
     assert result["type"] is FlowResultType.MENU
-    assert result["menu_options"] == ["bridges", "add_room", "trial"]
+    assert result["menu_options"] == ["bridges", "add_room"]
     fleet.runtime_data.store.create("Room A", [])
     result = await step(hass, fleet)
-    assert result["menu_options"] == ["bridges", "add_room", "edit_room", "delete_room", "trial"]
+    assert result["menu_options"] == ["bridges", "add_room", "edit_room", "delete_room"]
 
 
 async def test_options_need_a_loaded_entry(hass: HomeAssistant, fleet: MockConfigEntry) -> None:
@@ -144,12 +144,10 @@ async def test_diagnostics_leak_no_identity(hass: HomeAssistant, fleet: MockConf
         assert leak not in text, leak
 
     assert diagnostics["prefixes"] == [Z2M, TUYA]
-    assert diagnostics["open_set_keys"] == []
-    assert diagnostics["trial_set_keys"] == ["current_heating_setpoint"]
-    assert diagnostics["trial_thermostat"] is None
+    assert diagnostics["set_keys"] == ["current_heating_setpoint", "preset"]
     assert diagnostics["bridges"][TUYA]["online"] is True
     assert diagnostics["bridges"][TUYA]["info"]["version"] == "0.1.0"
-    assert diagnostics["bridges"][Z2M] == {"online": None, "info": {}}
+    assert diagnostics["bridges"][Z2M] == {"online": None, "info": {}, "open_for": []}
     first = diagnostics["thermostats"][0]
     assert first["ref"] == "thermostat_1" and first["identity"] == "tuya"
     assert first["has_ieee_address"] is True and first["available"] is True
