@@ -13,7 +13,7 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 
 from . import CompanionConfigEntry
-from .const import OPEN_SET_KEYS
+from .const import OPEN_SET_KEYS, TRIAL_SET_KEYS
 from .rooms import RoomState
 
 TO_REDACT = {
@@ -53,6 +53,7 @@ async def async_get_config_entry_diagnostics(
     """Diagnostics of the entry."""
     coordinator = entry.runtime_data.coordinator
     store = entry.runtime_data.store
+    trial = coordinator.trial_thermostat
     refs = {key: f"thermostat_{index}" for index, key in enumerate(coordinator.thermostats, 1)}
 
     thermostats = [
@@ -94,6 +95,8 @@ async def async_get_config_entry_diagnostics(
     return {
         "prefixes": list(coordinator.prefixes),
         "open_set_keys": sorted(OPEN_SET_KEYS),
+        "trial_set_keys": sorted(TRIAL_SET_KEYS),
+        "trial_thermostat": refs.get(trial, "unknown") if trial else None,
         "bridges": {
             prefix: {
                 "online": coordinator.bridge_online.get(prefix),

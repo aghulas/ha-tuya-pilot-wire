@@ -24,7 +24,8 @@
           "bridges": "Bridges",
           "add_room": "Add a room",
           "edit_room": "Edit a room",
-          "delete_room": "Delete a room"
+          "delete_room": "Delete a room",
+          "trial": "Write trial"
         }
       },
       "bridges": {
@@ -61,6 +62,13 @@
         "description": "The room's thermostats stay, each with its own thermostat entity. Nothing is sent to the devices.",
         "data": {
           "room": "Room"
+        }
+      },
+      "trial": {
+        "title": "Supervised write trial",
+        "description": "Designate the single thermostat the write under trial may address: its manual setpoint. The control appears only once its bridge accepts writes. Choose “—” to close it again. A trial is run with the owner's agreement on the exact operation and recorded in docs/validation.",
+        "data": {
+          "trial_thermostat": "Trial thermostat"
         }
       }
     },
@@ -156,6 +164,11 @@
           }
         }
       }
+    },
+    "number": {
+      "manual_setpoint": {
+        "name": "Manual setpoint"
+      }
     }
   },
   "exceptions": {
@@ -179,6 +192,18 @@
     },
     "thermostat_in_other_room": {
       "message": "A thermostat already belongs to the room \"{room}\"."
+    },
+    "thermostat_unavailable": {
+      "message": "This thermostat is not responding: nothing was sent."
+    },
+    "value_out_of_bounds": {
+      "message": "The value must be between {low} and {high}, in steps of {step}: nothing was sent."
+    },
+    "set_no_answer": {
+      "message": "The bridge did not answer the command. Nothing is assumed: the value shown is the last one the device confirmed."
+    },
+    "set_refused": {
+      "message": "The bridge refused the command: {error}"
     }
   },
   "services": {

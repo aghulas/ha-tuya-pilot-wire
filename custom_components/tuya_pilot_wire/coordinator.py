@@ -1,8 +1,11 @@
 """MQTT coordinator of the Companion: the bridges' topics merged into one fleet of thermostats.
 
 For each configured prefix it reads `bridge/state`, `bridge/info`, `bridge/devices`, the state
-topic of each thermostat and its `availability`. It publishes nothing: no `/set` key is open yet
-(`const.OPEN_SET_KEYS`), and the read side needs no request to the bridge.
+topic of each thermostat and its `availability`. The read side needs no request to the bridge.
+
+It publishes one thing, and only when `supports_set` allows it: a `/set` command (`async_set`).
+A command never changes the state held here; the state changes when the bridge publishes what
+the device confirmed.
 
 Reading rules, all on the side of "an entity never lies":
 
@@ -15,15 +18,18 @@ Reading rules, all on the side of "an entity never lies":
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
+import uuid
 from collections.abc import Callable
 from typing import Any
 
 from homeassistant.components import mqtt
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
-from .const import OPEN_SET_KEYS
+from .const import DOMAIN, OPEN_SET_KEYS, SET_BOUNDS, SET_TIMEOUT, TRIAL_SET_KEYS
 from .model import (
     Thermostat,
     descriptor_identity,
@@ -34,7 +40,7 @@ from .model import (
 
 # What is kept of `bridge/info`: versions and channel states. The rest (a Zigbee2MQTT `config`
 # block, for one) can hold secrets and is of no use here.
-INFO_KEYS = ("version", "commit", "contract", "contract_version", "channels")
+INFO_KEYS = ("version", "commit", "contract", "contract_version", "channels", "read_only")
 
 # How long after a coordinator stopped its fleet may still be handed to its successor (seconds).
 HANDOVER_MAX_AGE = 5.0
@@ -71,11 +77,17 @@ class CompanionCoordinator:
     """State of every pilot-wire thermostat published under the configured prefixes."""
 
     def __init__(
-        self, hass: HomeAssistant, prefixes: list[str] | tuple[str, ...], resolve_key: KeyResolver
+        self,
+        hass: HomeAssistant,
+        prefixes: list[str] | tuple[str, ...],
+        resolve_key: KeyResolver,
+        trial_thermostat: str | None = None,
     ) -> None:
         self.hass = hass
         self.prefixes: tuple[str, ...] = tuple(dict.fromkeys(prefixes))
         self._resolve_key = resolve_key
+        self.trial_thermostat = trial_thermostat or None
+        self._pending: dict[str, asyncio.Future[dict[str, Any]]] = {}
         self.thermostats: dict[str, Thermostat] = {}
         self.bridge_online: dict[str, bool | None] = dict.fromkeys(self.prefixes)
         self.bridge_info: dict[str, dict[str, Any]] = {}
@@ -164,8 +176,70 @@ class CompanionCoordinator:
         return self.thermostats.get(key) if self.available(key) else None
 
     def supports_set(self, key: str, set_key: str) -> bool:
-        """True when the Companion may publish ``set_key`` to this thermostat. Never, for now."""
-        return key in self.thermostats and set_key in OPEN_SET_KEYS
+        """True when the Companion may publish ``set_key`` to this thermostat.
+
+        The key must be open for every thermostat, or under trial and this thermostat the one
+        designated for trials; and the thermostat's bridge must have said it is not read only.
+        """
+        thermostat = self.thermostats.get(key)
+        if thermostat is None:
+            return False
+        allowed = set_key in OPEN_SET_KEYS or (
+            set_key in TRIAL_SET_KEYS and key == self.trial_thermostat
+        )
+        return allowed and self.bridge_info.get(thermostat.prefix, {}).get("read_only") is False
+
+    async def async_set(self, key: str, set_key: str, value: float) -> None:
+        """WRITE. Publish one ``/set`` key to one thermostat and wait for the bridge's answer.
+
+        Refused before anything is published when no route is open for this key on this
+        thermostat, when the thermostat is not usable, or when the value is outside the key's
+        bounds or off its step. Raises when the bridge refuses or does not answer. Never touches
+        the state held here: the bridge publishes it once the device confirmed.
+        """
+        if not self.supports_set(key, set_key):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="no_write_route"
+            )
+        thermostat = self.get(key)
+        if thermostat is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="thermostat_unavailable"
+            )
+        low, high, step = SET_BOUNDS[set_key]
+        steps = (value - low) / step
+        if not low <= value <= high or abs(steps - round(steps)) > 1e-6:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="value_out_of_bounds",
+                translation_placeholders={"low": str(low), "high": str(high), "step": str(step)},
+            )
+
+        transaction = uuid.uuid4().hex
+        answer: asyncio.Future[dict[str, Any]] = self.hass.loop.create_future()
+        self._pending[transaction] = answer
+        try:
+            await mqtt.async_publish(
+                self.hass,
+                f"{thermostat.prefix}/{thermostat.friendly_name}/set",
+                json.dumps({set_key: value, "transaction": transaction}),
+                qos=1,
+                retain=False,
+            )
+            async with asyncio.timeout(SET_TIMEOUT):
+                response = await answer
+        except TimeoutError as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="set_no_answer"
+            ) from err
+        finally:
+            self._pending.pop(transaction, None)
+        if response.get("status") != "ok":
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="set_refused",
+                translation_placeholders={"error": str(response.get("error") or "no reason given")},
+            )
 
     # -- ingestion ---------------------------------------------------------------------------
 
@@ -187,9 +261,19 @@ class CompanionCoordinator:
         elif suffix == "bridge/info":
             info = _decode_json(payload)
             if isinstance(info, dict):
-                self.bridge_info[prefix] = {k: info[k] for k in INFO_KEYS if k in info}
+                kept = {k: info[k] for k in INFO_KEYS if k in info}
+                if kept != self.bridge_info.get(prefix):
+                    # `read_only` decides whether a write control may exist: listeners must know.
+                    self.bridge_info[prefix] = kept
+                    self._notify()
         elif suffix == "bridge/devices":
             self._ingest_devices(prefix, payload)
+        elif suffix == "bridge/response/device/set":
+            response = _decode_json(payload)
+            if isinstance(response, dict):
+                answer = self._pending.get(str(response.get("transaction")))
+                if answer is not None and not answer.done():
+                    answer.set_result(response)
         elif suffix.startswith("bridge/") or suffix.endswith(("/set", "/get")):
             return
         elif suffix.endswith("/availability"):

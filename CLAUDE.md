@@ -33,12 +33,12 @@ and `~/dev/pydanfoss-cloud`. Reuse their patterns; do not import their code.
 
 ## Where the work stands
 
-M0 done (`docs/device.md`). M3 built: the Companion reads (`docs/companion.md`) — MQTT
-coordinator, one device model for both bridges, rooms in Home Assistant storage, `climate`,
-`sensor`, `binary_sensor`, diagnostics, options flow, room services. **No write is open**
-(`const.OPEN_SET_KEYS` is empty). v0.1.1 runs on the reference install (record in
-`docs/validation/`). Next: M4, one write at a time, each with its supervised trial; the first
-candidate is the manual setpoint, once the bridge has its sharing channel and write gate.
+M0 done (`docs/device.md`). M3 delivered: the Companion reads (`docs/companion.md`) and runs on
+the reference install (record in `docs/validation/`). M4 started: **one write is built and
+closed**, the manual setpoint, publishable only to the thermostat designated for its trial and
+only when its bridge is not read only (`TRIAL_SET_KEYS`, `CONF_TRIAL_THERMOSTAT`). Its protocol
+is `docs/validation/trial-1-manual-setpoint-protocol.md`; it has **not been run**.
+`OPEN_SET_KEYS` stays empty until the change that records a passed trial.
 
 ## Quality
 
