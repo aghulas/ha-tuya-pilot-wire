@@ -17,9 +17,10 @@ supervised trial ([`architecture.md`](architecture.md), "Rule for adding a route
 
 - **M0** — done 2026-11-27: [`device.md`](device.md). Zigbee, `TS0601` / `_TZE204_fu1bfwza`, not
   defined in Zigbee2MQTT; property names fixed on the nearest upstream definition.
-- **M3** — built 2026-11-27 against synthetic messages ([`companion.md`](companion.md)); its "done
-  when" (entities match the vendor app, energy matches over a week) is checked on the reference
-  install once the bridge (M2) publishes.
+- **M3** — built and delivered 2026-11-27 ([`companion.md`](companion.md)): v0.1.1 runs on the
+  reference install, read only, six thermostats in three rooms; values match the two existing
+  readers ([record](validation/2026-11-27-m3-read-comparison.md)). Its "done when" closes after a
+  week of matching energy.
 
 ## Order of work
 

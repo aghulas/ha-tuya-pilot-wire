@@ -36,7 +36,9 @@ and `~/dev/pydanfoss-cloud`. Reuse their patterns; do not import their code.
 M0 done (`docs/device.md`). M3 built: the Companion reads (`docs/companion.md`) — MQTT
 coordinator, one device model for both bridges, rooms in Home Assistant storage, `climate`,
 `sensor`, `binary_sensor`, diagnostics, options flow, room services. **No write is open**
-(`const.OPEN_SET_KEYS` is empty). Next: M4, one write at a time, each with its supervised trial.
+(`const.OPEN_SET_KEYS` is empty). v0.1.1 runs on the reference install (record in
+`docs/validation/`). Next: M4, one write at a time, each with its supervised trial; the first
+candidate is the manual setpoint, once the bridge has its sharing channel and write gate.
 
 ## Quality
 
