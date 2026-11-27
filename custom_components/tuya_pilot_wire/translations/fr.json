@@ -1,0 +1,19 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Tuya Pilot Wire Companion",
+        "description": "La Companion lit les thermostats fil pilote publiés par des ponts MQTT. Indiquez le préfixe de topic de chaque pont à lire, séparés par des virgules.",
+        "data": {
+          "mqtt_prefixes": "Préfixes des ponts"
+        }
+      }
+    },
+    "error": {
+      "invalid_prefixes": "Indiquez au moins un préfixe ; lettres, chiffres, tiret et tiret bas uniquement."
+    },
+    "abort": {
+      "single_instance_allowed": "Déjà configuré. Une seule configuration est possible."
+    }
+  }
+}

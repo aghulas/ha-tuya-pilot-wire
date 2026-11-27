@@ -1,0 +1,19 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Tuya Pilot Wire Companion",
+        "description": "The Companion reads pilot-wire thermostats from MQTT bridges. Give the topic prefix of each bridge to read, separated by commas.",
+        "data": {
+          "mqtt_prefixes": "Bridge prefixes"
+        }
+      }
+    },
+    "error": {
+      "invalid_prefixes": "Give at least one prefix; letters, digits, hyphen and underscore only."
+    },
+    "abort": {
+      "single_instance_allowed": "Already configured. Only a single configuration is possible."
+    }
+  }
+}
