@@ -22,6 +22,10 @@ supervised trial ([`architecture.md`](architecture.md), "Rule for adding a route
   readers ([record](validation/2026-11-27-m3-read-comparison.md)). Its "done when" closes after a
   week of matching energy.
 
+- **M4** — started 2026-11-27: the manual setpoint is built in the Companion, closed, for a
+  trial on one designated thermostat ([protocol](validation/trial-1-manual-setpoint-protocol.md)).
+  Not run: it waits for the bridge's sharing channel and write gate, and the owner's agreement.
+
 ## Order of work
 
 M0 comes first and is short: it can change the contract and the scope. M1 and M2 do not wait for

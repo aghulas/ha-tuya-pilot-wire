@@ -24,7 +24,8 @@
           "bridges": "Ponts",
           "add_room": "Ajouter une pièce",
           "edit_room": "Modifier une pièce",
-          "delete_room": "Supprimer une pièce"
+          "delete_room": "Supprimer une pièce",
+          "trial": "Essai d'écriture"
         }
       },
       "bridges": {
@@ -61,6 +62,13 @@
         "description": "Les thermostats de la pièce restent, chacun avec sa propre entité thermostat. Rien n'est envoyé aux appareils.",
         "data": {
           "room": "Pièce"
+        }
+      },
+      "trial": {
+        "title": "Essai d'écriture supervisé",
+        "description": "Désignez le seul thermostat auquel l'écriture à l'essai peut s'adresser : sa consigne manuelle. La commande n'apparaît que lorsque son pont accepte les écritures. Choisissez « — » pour la refermer. Un essai se fait avec l'accord du propriétaire sur l'opération exacte et se consigne dans docs/validation.",
+        "data": {
+          "trial_thermostat": "Thermostat d'essai"
         }
       }
     },
@@ -156,6 +164,11 @@
           }
         }
       }
+    },
+    "number": {
+      "manual_setpoint": {
+        "name": "Consigne manuelle"
+      }
     }
   },
   "exceptions": {
@@ -179,6 +192,18 @@
     },
     "thermostat_in_other_room": {
       "message": "Un thermostat appartient déjà à la pièce « {room} »."
+    },
+    "thermostat_unavailable": {
+      "message": "Ce thermostat ne répond pas : rien n'a été envoyé."
+    },
+    "value_out_of_bounds": {
+      "message": "La valeur doit être comprise entre {low} et {high}, par pas de {step} : rien n'a été envoyé."
+    },
+    "set_no_answer": {
+      "message": "Le pont n'a pas répondu à la commande. Rien n'est supposé : la valeur affichée est la dernière confirmée par l'appareil."
+    },
+    "set_refused": {
+      "message": "Le pont a refusé la commande : {error}"
     }
   },
   "services": {

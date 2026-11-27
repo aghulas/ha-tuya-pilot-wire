@@ -1,8 +1,9 @@
 """Tuya Pilot Wire Companion: pilot-wire thermostats read from MQTT bridges.
 
-Read only for now: the entry subscribes to the configured bridge prefixes, keeps rooms in Home
-Assistant storage and creates `climate`, `sensor` and `binary_sensor` entities. Writes arrive
-with milestone M4, one route at a time (docs/roadmap.md).
+The entry subscribes to the configured bridge prefixes, keeps rooms in Home Assistant storage and
+creates `climate`, `sensor` and `binary_sensor` entities, all read only. Writes arrive with
+milestone M4, one route at a time (docs/roadmap.md): the only one built is the manual setpoint,
+as a `number` on the single thermostat designated for its supervised trial.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.typing import ConfigType
 
-from .const import CONF_MQTT_PREFIXES, DATA_HANDOVER, DOMAIN, PLATFORMS
+from .const import CONF_MQTT_PREFIXES, CONF_TRIAL_THERMOSTAT, DATA_HANDOVER, DOMAIN, PLATFORMS
 from .coordinator import CompanionCoordinator
 from .entity import ROOM_PREFIX, room_identifier
 from .rooms import CompanionStore
@@ -56,7 +57,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: CompanionConfigEntry) ->
 
     store = CompanionStore(hass)
     await store.async_load()
-    coordinator = CompanionCoordinator(hass, entry_prefixes(entry), store.resolve_key)
+    coordinator = CompanionCoordinator(
+        hass, entry_prefixes(entry), store.resolve_key, entry.options.get(CONF_TRIAL_THERMOSTAT)
+    )
     previous: CompanionCoordinator | None = hass.data.pop(DATA_HANDOVER, None)
     if previous is not None:
         coordinator.adopt(previous)
@@ -99,6 +102,11 @@ def _remove_stale(hass: HomeAssistant, entry: ConfigEntry, store: CompanionStore
             ):
                 devices.async_remove_device(device.id)
     entities = er.async_get(hass)
+    # A write control exists only for the thermostat designated for trials.
+    trial = entry.options.get(CONF_TRIAL_THERMOSTAT)
+    for registered in er.async_entries_for_config_entry(entities, entry.entry_id):
+        if registered.domain == "number" and registered.unique_id != f"{trial}_manual_setpoint":
+            entities.async_remove(registered.entity_id)
     for room in store.rooms.values():
         for key in room.members:
             entity_id = entities.async_get_entity_id("climate", DOMAIN, f"{key}_climate")

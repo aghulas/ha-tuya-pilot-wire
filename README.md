@@ -20,8 +20,9 @@ Unofficial: not affiliated with Tuya.
 
 **Read only.** The integration reads the thermostats the bridges publish and shows them in Home
 Assistant, per thermostat and per room: temperature, setpoint, mode, heating, window, fault,
-power and energy. It sends nothing to a device yet: writes open one at a time, each after a
-supervised trial on real hardware ([roadmap](docs/roadmap.md), M4).
+power and energy. Writes open one at a time, each after a supervised trial on real hardware
+([roadmap](docs/roadmap.md), M4). The first, the manual setpoint, is built and closed: it can be
+enabled for one designated thermostat, for its trial.
 
 - [`docs/companion.md`](docs/companion.md) — what the integration reads, its entities, rooms;
 - [`docs/device.md`](docs/device.md) — the thermostat: Zigbee fingerprint, Zigbee2MQTT support;

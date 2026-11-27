@@ -1,9 +1,9 @@
-# The Companion, read only (milestone M3)
+# The Companion (milestones M3 and M4)
 
-Status: built and tested against synthetic messages that follow the
-[MQTT contract](https://github.com/aghulas/tuyapilot2mqtt/blob/main/docs/mqtt-contract.md).
-It publishes **nothing**: no `/set` key is open (`const.OPEN_SET_KEYS` is empty) and reading needs
-no request to a bridge. Writes arrive with M4, one route at a time.
+Status: the read side is built, tested against synthetic messages that follow the
+[MQTT contract](https://github.com/aghulas/tuyapilot2mqtt/blob/main/docs/mqtt-contract.md), and
+runs on the reference install. **No write is open**: `const.OPEN_SET_KEYS` is empty. One write is
+built and closed, for its supervised trial: see "Writes" below.
 
 ## What it reads
 
@@ -89,6 +89,31 @@ dashboard, the per-thermostat energy sensors are the stable choice.
 
 A thermostat in a room keeps its sensors and binary sensors; only its own `climate` is replaced
 by the room's.
+
+## Writes
+
+One at a time, each opened by its own supervised trial ([`architecture.md`](architecture.md)).
+
+| Key | State |
+|---|---|
+| `current_heating_setpoint` (manual setpoint) | **under trial**, closed by default. [Protocol](validation/trial-1-manual-setpoint-protocol.md) |
+| everything else | not built |
+
+A key under trial can be published to **one** thermostat only: the one designated in the options
+(Configure → "Write trial"), and only while its bridge publishes `read_only: false` in
+`bridge/info`. That thermostat then gets a "Manual setpoint" `number`; no other thermostat, and no
+room, gets a control.
+
+What a write does:
+
+1. checks the route, that the thermostat is usable, and the value (5–40 °C, step 0.5) — a refusal
+   here publishes nothing;
+2. publishes `{"current_heating_setpoint": <value>, "transaction": <id>}` on the thermostat's
+   `/set` topic;
+3. waits up to 45 s for the bridge's answer on `bridge/response/device/set` with the same
+   transaction; an error or no answer fails the service call with the bridge's reason;
+4. changes **nothing** in the state shown: the value moves when the bridge publishes the state
+   the device confirmed.
 
 ## Diagnostics
 
