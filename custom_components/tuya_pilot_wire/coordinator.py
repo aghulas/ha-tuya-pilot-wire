@@ -30,7 +30,7 @@ from homeassistant.components import mqtt
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
-from .const import DOMAIN, SET_BOUNDS, SET_KEYS, SET_PRESETS, SET_TIMEOUT
+from .const import DOMAIN, MIN_SET_INTERVAL, SET_BOUNDS, SET_KEYS, SET_PRESETS, SET_TIMEOUT
 from .model import (
     PRESET_MANUAL,
     Thermostat,
@@ -96,6 +96,7 @@ class CompanionCoordinator:
         self.prefixes: tuple[str, ...] = tuple(dict.fromkeys(prefixes))
         self._resolve_key = resolve_key
         self._pending: dict[str, asyncio.Future[dict[str, Any]]] = {}
+        self._last_sent: dict[str, float] = {}  # thermostat key -> monotonic time of its last /set
         self.thermostats: dict[str, Thermostat] = {}
         self.bridge_online: dict[str, bool | None] = dict.fromkeys(self.prefixes)
         self.bridge_info: dict[str, dict[str, Any]] = {}
@@ -168,6 +169,7 @@ class CompanionCoordinator:
         self._by_topic = previous._by_topic
         self._listed = previous._listed
         self._early = previous._early
+        self._last_sent = previous._last_sent
         return True
 
     # -- reading -----------------------------------------------------------------------------
@@ -331,7 +333,15 @@ class CompanionCoordinator:
             )
 
     async def _send(self, thermostat: Thermostat, set_key: str, value: Any) -> None:
-        """Publish one command and wait for the bridge's answer. Raises unless confirmed."""
+        """Publish one command and wait for the bridge's answer. Raises unless confirmed.
+
+        Waits first until ``MIN_SET_INTERVAL`` has passed since the last command to the same
+        thermostat, the bridge's own limit.
+        """
+        last = self._last_sent.get(thermostat.key)
+        if last is not None and (delay := last + MIN_SET_INTERVAL - time.monotonic()) > 0:
+            await asyncio.sleep(delay)
+        self._last_sent[thermostat.key] = time.monotonic()
         transaction = uuid.uuid4().hex
         answer: asyncio.Future[dict[str, Any]] = self.hass.loop.create_future()
         self._pending[transaction] = answer

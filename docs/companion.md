@@ -129,9 +129,12 @@ What a write does:
    overwrites a written setpoint, and the other presets do not keep it (contract §4). A refusal
    here publishes nothing and names the thermostats concerned. To set a room's setpoint, set its
    preset to `manual` first;
-2. publishes `{"<key>": <value>, "transaction": <id>}` on each thermostat's `/set` topic, **one
-   after the other** (the bridge writes and reads back one device at a time), each with its own
-   transaction;
+2. publishes `{"<key>": <value>, "transaction": <id>}` — one key per command, as the bridge
+   requires — on each thermostat's `/set` topic, **one after the other** (the bridge writes and
+   reads back one device at a time), each with its own transaction. Two commands to the **same**
+   thermostat are at least 10 s apart (`MIN_SET_INTERVAL`, the bridge's limit): a preset then a
+   setpoint waits here instead of being refused there. The bridge's other limit, 30 writes an
+   hour per thermostat, is not counted here: past it, its refusal is the call's error;
 3. waits up to 45 s for each answer on `bridge/response/device/set`; `"status": "ok"` with no
    result `"confirmed": false` is a confirmation. A thermostat refused or not confirmed does not
    stop the others: the call then fails naming each thermostat not confirmed with the bridge's

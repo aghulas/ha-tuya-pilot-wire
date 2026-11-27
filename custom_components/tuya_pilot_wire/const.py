@@ -34,6 +34,11 @@ SET_BOUNDS: dict[str, tuple[float, float, float]] = {"current_heating_setpoint":
 # entry migration to 1.2: the bridge now says which thermostats a write is open for.
 LEGACY_CONF_TRIAL_THERMOSTAT = "trial_thermostat"
 
+# Shortest gap between two commands to the same thermostat (seconds). The bridge allows one write
+# per thermostat every 10 s (and 30 an hour) and refuses the next with nothing sent: a preset then
+# a setpoint to the same thermostat waits here instead of being refused there.
+MIN_SET_INTERVAL = 10.0
+
 # How long the bridge has to answer a command (it writes, then reads the device back).
 SET_TIMEOUT = 45.0
 
