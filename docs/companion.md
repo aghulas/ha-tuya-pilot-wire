@@ -72,8 +72,8 @@ Per room (a device named after the room):
 | Value | Rule |
 |---|---|
 | temperature | mean of the members that report one |
-| on / off, mode, setpoint | the members' common value; unknown when they differ |
-| "Thermostats disagree" | on when on / off, mode or setpoint differ; the `differing` attribute names which |
+| on / off, mode, setpoint | the members' common value; unknown when they differ, or when one member's value is unknown |
+| "Thermostats disagree" | on when two members report different on / off, mode or setpoint (an unknown value is not a disagreement); the `differing` attribute names which |
 | heating, window, fault | on as soon as one member says so; off only when every member says not; else unavailable |
 | power, energy | sums, only when **every** member reports the figure; else unavailable |
 

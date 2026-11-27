@@ -5,8 +5,8 @@ values are computed from its members on demand (`RoomState`) and follow one rule
 given only when it is true of the room.
 
 - temperature: mean of the members that report one;
-- on / off, preset, target: the members' common value, or nothing when they disagree (and the
-  disagreement is named);
+- on / off, preset, target: the members' common value; nothing when one member's value is unknown;
+  nothing when they disagree, and the disagreement is named;
 - heating, window, fault: true as soon as one member says so, false only when every member says
   not;
 - power, energy: sums, given only when **every** member reports the figure. A partial sum would
@@ -154,13 +154,17 @@ class CompanionStore:
 
 
 def _common(values: list[Any]) -> tuple[Any, bool]:
-    """``(the value all share, True)``, or ``(None, False)`` when they differ."""
-    if not values:
+    """``(value, agreed)`` over the members' values, an unknown value being ``None``.
+
+    Two known values that differ are a disagreement. A member whose value is unknown is not: the
+    room's value is then unknown, and nobody is said to disagree.
+    """
+    known = [value for value in values if value is not None]
+    if any(value != known[0] for value in known[1:]):
+        return None, False
+    if len(known) != len(values) or not known:
         return None, True
-    first = values[0]
-    if all(value == first for value in values[1:]):
-        return first, True
-    return None, False
+    return known[0], True
 
 
 def _any(values: list[bool | None], complete: bool) -> bool | None:

@@ -325,3 +325,18 @@ async def test_device_removal_is_allowed_only_for_what_is_gone(
     )
     await hass.async_block_till_done()
     assert await remove(by_identifier["dev-b1"].id)
+
+
+async def test_an_unknown_value_is_not_a_disagreement(
+    hass: HomeAssistant, room: MockConfigEntry
+) -> None:
+    # A2's last read brought neither its mode nor its preset.
+    await publish(hass, "Thermostat A2", system_mode=None, preset=None)
+    climate = hass.states.get("climate.room_a")
+    assert climate.state == STATE_UNKNOWN
+    assert climate.attributes["differing"] == []
+    assert climate.attributes["preset"] is None
+    assert hass.states.get("binary_sensor.room_a_thermostats_disagree").state == STATE_OFF
+    # A known difference is still one, whatever else is unknown.
+    await publish(hass, "Thermostat A2", system_mode="off", preset=None)
+    assert hass.states.get("climate.room_a").attributes["differing"] == ["system_mode"]
