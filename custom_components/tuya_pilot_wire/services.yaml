@@ -1,0 +1,41 @@
+create_room:
+  fields:
+    name:
+      required: true
+      example: Library
+      selector:
+        text:
+    thermostats:
+      required: false
+      selector:
+        device:
+          multiple: true
+          integration: tuya_pilot_wire
+
+update_room:
+  fields:
+    room:
+      required: true
+      example: Library
+      selector:
+        text:
+    name:
+      required: false
+      selector:
+        text:
+    thermostats:
+      required: false
+      selector:
+        device:
+          multiple: true
+          integration: tuya_pilot_wire
+
+delete_room:
+  fields:
+    room:
+      required: true
+      example: Library
+      selector:
+        text:
+
+list_rooms:

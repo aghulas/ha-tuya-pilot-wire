@@ -15,5 +15,218 @@
     "abort": {
       "single_instance_allowed": "Already configured. Only a single configuration is possible."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Tuya Pilot Wire Companion",
+        "menu_options": {
+          "bridges": "Bridges",
+          "add_room": "Add a room",
+          "edit_room": "Edit a room",
+          "delete_room": "Delete a room"
+        }
+      },
+      "bridges": {
+        "title": "Bridges",
+        "description": "The Companion reads pilot-wire thermostats from MQTT bridges. Give the topic prefix of each bridge to read, separated by commas.",
+        "data": {
+          "mqtt_prefixes": "Bridge prefixes"
+        }
+      },
+      "add_room": {
+        "title": "Add a room",
+        "description": "A room groups thermostats and shows one thermostat for all of them. A thermostat belongs to one room at most. Nothing is sent to the devices.",
+        "data": {
+          "name": "Name",
+          "thermostats": "Thermostats"
+        }
+      },
+      "edit_room": {
+        "title": "Edit a room",
+        "data": {
+          "room": "Room"
+        }
+      },
+      "room": {
+        "title": "Room {room}",
+        "description": "A room groups thermostats and shows one thermostat for all of them. A thermostat belongs to one room at most. Nothing is sent to the devices.",
+        "data": {
+          "name": "Name",
+          "thermostats": "Thermostats"
+        }
+      },
+      "delete_room": {
+        "title": "Delete a room",
+        "description": "The room's thermostats stay, each with its own thermostat entity. Nothing is sent to the devices.",
+        "data": {
+          "room": "Room"
+        }
+      }
+    },
+    "error": {
+      "invalid_prefixes": "Give at least one prefix; letters, digits, hyphen and underscore only.",
+      "room_name_empty": "Give the room a name.",
+      "room_name_taken": "Another room already has this name.",
+      "thermostat_in_other_room": "One of these thermostats already belongs to another room."
+    },
+    "abort": {
+      "not_loaded": "The Tuya Pilot Wire Companion is not loaded."
+    }
+  },
+  "entity": {
+    "climate": {
+      "thermostat": {
+        "state_attributes": {
+          "preset": {
+            "name": "Mode",
+            "state": {
+              "program": "Schedule",
+              "manual": "Manual",
+              "eco": "Eco",
+              "holiday": "Holiday",
+              "antifrost": "Frost protection"
+            }
+          },
+          "members": {
+            "name": "Thermostats"
+          },
+          "members_missing": {
+            "name": "Thermostats not responding"
+          },
+          "differing": {
+            "name": "Values that differ"
+          },
+          "current_heating_setpoint": {
+            "name": "Manual setpoint"
+          },
+          "eco_temperature": {
+            "name": "Eco setpoint"
+          },
+          "antifrost_temperature": {
+            "name": "Frost-protection setpoint"
+          },
+          "holiday_temperature": {
+            "name": "Holiday setpoint"
+          },
+          "target_temperature": {
+            "name": "Setpoint"
+          }
+        }
+      }
+    },
+    "sensor": {
+      "local_temperature": {
+        "name": "Temperature"
+      },
+      "preset": {
+        "name": "Mode",
+        "state": {
+          "program": "Schedule",
+          "manual": "Manual",
+          "eco": "Eco",
+          "holiday": "Holiday",
+          "antifrost": "Frost protection"
+        }
+      },
+      "target_temperature": {
+        "name": "Setpoint"
+      }
+    },
+    "binary_sensor": {
+      "heating": {
+        "name": "Heating"
+      },
+      "fault": {
+        "name": "Fault",
+        "state_attributes": {
+          "faults": {
+            "name": "Faults"
+          }
+        }
+      },
+      "disagreement": {
+        "name": "Thermostats disagree",
+        "state_attributes": {
+          "differing": {
+            "name": "Values that differ"
+          },
+          "members_missing": {
+            "name": "Thermostats not responding"
+          }
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "no_write_route": {
+      "message": "This thermostat is read only for now: no write route is open in the Companion."
+    },
+    "not_loaded": {
+      "message": "The Tuya Pilot Wire Companion is not loaded."
+    },
+    "thermostat_unknown": {
+      "message": "No thermostat matches \"{thermostat}\"."
+    },
+    "room_unknown": {
+      "message": "No room matches \"{room}\"."
+    },
+    "room_name_empty": {
+      "message": "Give the room a name."
+    },
+    "room_name_taken": {
+      "message": "Another room is already named \"{name}\"."
+    },
+    "thermostat_in_other_room": {
+      "message": "A thermostat already belongs to the room \"{room}\"."
+    }
+  },
+  "services": {
+    "create_room": {
+      "name": "Create a room",
+      "description": "Creates a room and puts thermostats in it. Changes Home Assistant storage only; nothing is sent to the devices.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "Name of the room."
+        },
+        "thermostats": {
+          "name": "Thermostats",
+          "description": "Thermostats of the room: device ids, or the names the bridge gives them."
+        }
+      }
+    },
+    "update_room": {
+      "name": "Update a room",
+      "description": "Renames a room and/or replaces its thermostats. Nothing is sent to the devices.",
+      "fields": {
+        "room": {
+          "name": "Room",
+          "description": "The room: its device id, or its name."
+        },
+        "name": {
+          "name": "Name",
+          "description": "New name of the room."
+        },
+        "thermostats": {
+          "name": "Thermostats",
+          "description": "The full list of the room's thermostats; it replaces the current one."
+        }
+      }
+    },
+    "delete_room": {
+      "name": "Delete a room",
+      "description": "Deletes a room. Its thermostats stay, each with its own thermostat entity.",
+      "fields": {
+        "room": {
+          "name": "Room",
+          "description": "The room: its device id, or its name."
+        }
+      }
+    },
+    "list_rooms": {
+      "name": "List the rooms",
+      "description": "Returns the rooms, their thermostats, and the thermostats outside any room."
+    }
   }
 }

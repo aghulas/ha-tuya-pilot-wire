@@ -1,0 +1,28 @@
+{
+  "entity": {
+    "sensor": {
+      "preset": {
+        "default": "mdi:calendar-clock"
+      }
+    },
+    "binary_sensor": {
+      "disagreement": {
+        "default": "mdi:not-equal-variant"
+      }
+    }
+  },
+  "services": {
+    "create_room": {
+      "service": "mdi:home-plus"
+    },
+    "update_room": {
+      "service": "mdi:home-edit"
+    },
+    "delete_room": {
+      "service": "mdi:home-minus"
+    },
+    "list_rooms": {
+      "service": "mdi:home-search"
+    }
+  }
+}

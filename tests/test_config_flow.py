@@ -1,6 +1,6 @@
 """Config flow of the Companion."""
 
-from unittest.mock import patch
+from typing import Any
 
 import pytest
 from homeassistant.config_entries import SOURCE_USER
@@ -12,10 +12,8 @@ from custom_components.tuya_pilot_wire.const import CONF_MQTT_PREFIXES, DOMAIN
 
 
 @pytest.fixture(autouse=True)
-def no_mqtt_dependency():
-    """The skeleton needs no broker: do not set up the `mqtt` dependency in these tests."""
-    with patch("homeassistant.setup.async_process_deps_reqs", return_value=None):
-        yield
+def broker(mqtt_mock: Any) -> None:
+    """The entry is set up at the end of the flow: it needs the (mocked) broker."""
 
 
 def test_parse_prefixes() -> None:
