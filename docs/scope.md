@@ -37,8 +37,8 @@ This is the architecture of [`ha-danfoss-ally`](https://github.com/aghulas/ha-da
 | Reference install | six thermostats in three rooms (two per room), one gateway |
 
 Only this product is in scope until a second one is verified on real hardware. The radio between
-thermostat and gateway is **not established** (Zigbee is assumed, not verified): it is the first
-thing to settle, because the whole Zigbee2MQTT side depends on it (milestone M0).
+thermostat and gateway is **Zigbee** (model id `TS0601`, manufacturer name `_TZE204_fu1bfwza`);
+Zigbee2MQTT has no definition for it. Evidence and consequences: [`device.md`](device.md).
 
 Out of scope for now: pilot-wire **modules without a thermostat** (they take a mode order —
 comfort, eco, frost protection, off — and no setpoint), other Tuya heaters, and pairing (it needs
@@ -126,17 +126,19 @@ it read. Implemented and tested in `pytuya-pilot-wire`.
 |---|---|
 | 2026-11-27 | Three repositories from the start, public |
 | 2026-11-27 | Names: `ha-tuya-pilot-wire` (domain `tuya_pilot_wire`), `tuyapilot2mqtt`, `pytuya-pilot-wire` |
+| 2026-11-27 | M0: the device is Zigbee and undefined in Zigbee2MQTT; the project writes its converter (M5) and fixes the dialect names on the nearest upstream definition |
 | 2026-11-27 | A project of its own, not an extension of the Danfoss Companion: the devices, the dialect property names and the room model differ. Convergence is an open question |
 
 ## Open questions
 
-1. **Radio and Zigbee2MQTT support** (M0). Is the thermostat a Zigbee device, with which
-   manufacturer name and model id, and does Zigbee2MQTT have a definition for it? If not, an
-   external converter is part of the project. If it is not Zigbee at all, the Zigbee2MQTT side
-   serves other products only and the scope is redrawn.
-2. **Dialect property names.** The draft contract uses the names Zigbee2MQTT gives Tuya
-   thermostats (`current_heating_setpoint`, `preset`…). They are fixed on the real Zigbee2MQTT
-   definition once M0 has it.
+1. ~~Radio and Zigbee2MQTT support~~ **Settled by M0** ([`device.md`](device.md)): the thermostat
+   is a Zigbee device (`TS0601` / `_TZE204_fu1bfwza`, router, mains powered) and Zigbee2MQTT does
+   not define it. A converter of our own is part of M5. Left for M5: the manufacturer-name prefix
+   as the reference install's units announce it, and the index of each mode on the Zigbee side.
+2. ~~Dialect property names~~ **Settled by M0**: with no upstream definition, the names are those
+   Zigbee2MQTT uses for the nearest pilot-wire thermostat (`preset` values `program`, `manual`,
+   `eco`, `holiday`, `antifrost`; `antifrost_temperature`; `energy_today`…). Table in
+   [`device.md`](device.md); the contract carries them.
 3. **Which channel for the bridge's routine reads.** The sharing API pushes updates over its own
    MQTT link; coverage (which data points, how often) is not measured. The LAN read gives more but
    incompletely.
