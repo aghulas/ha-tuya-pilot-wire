@@ -105,6 +105,8 @@ async def test_rooms_through_the_options_flow(hass: HomeAssistant, fleet: MockCo
     assert (room.name, room.members) == ("Room One", ["dev-a1", "dev-b2"])
 
     # A member the bridge no longer lists is still offered for its room, by its key.
+    fire(hass, f"{TUYA}/bridge/devices", [descriptor("Thermostat B2", "dev-b2")])
+    await hass.async_block_till_done()
     result = await step(hass, fleet, {"next_step_id": "edit_room"}, {"room": room.id})
     offered = result["data_schema"].schema["thermostats"].config["options"]
     assert {"value": "dev-a1", "label": "dev-a1"} in offered

@@ -42,6 +42,9 @@ _SETPOINTS = (
 )
 
 
+_NATIVE_NAMES = hasattr(ClimateEntity, "native_current_temperature")
+
+
 def _hvac_mode(system_mode: str | None) -> HVACMode | None:
     if system_mode == "heat":
         return HVACMode.HEAT
@@ -63,8 +66,13 @@ class _ReadOnlyClimate(ClimateEntity):
 
     _attr_name = None
     _attr_translation_key = "thermostat"
-    _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_supported_features = ClimateEntityFeature(0)
+    # Home Assistant 2026.11 renamed the unit and current-temperature members (`native_…`) and
+    # warns about the former names; earlier versions know only those.
+    if _NATIVE_NAMES:
+        _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
+    else:
+        _attr_temperature_unit = UnitOfTemperature.CELSIUS
 
     @property
     def _source(self) -> Thermostat | RoomState | None:
@@ -92,9 +100,13 @@ class _ReadOnlyClimate(ClimateEntity):
     def hvac_action(self) -> HVACAction | None:
         return _hvac_action(self.hvac_mode, self._read("heating"))
 
-    @property
-    def current_temperature(self) -> float | None:
+    def _local_temperature(self) -> float | None:
         return self._read("local_temperature")
+
+    if _NATIVE_NAMES:
+        native_current_temperature = property(_local_temperature)
+    else:
+        current_temperature = property(_local_temperature)
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Refuse: no write route is open."""

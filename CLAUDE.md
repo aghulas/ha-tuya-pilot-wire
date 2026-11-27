@@ -47,6 +47,9 @@ coordinator, one device model for both bridges, rooms in Home Assistant storage,
 
 Green before a commit; CI runs the same, plus `hassfest` and the HACS validation. The test
 harness follows the Home Assistant line run in production (pin in `requirements-dev.txt`).
+The mocked broker of the harness replays no retained message and knows nothing of Home
+Assistant's subscription debouncing: what depends on the real broker (retained messages after a
+reload, for one) is checked on the reference install, and written down in `docs/companion.md`.
 
 ## Commit, push
 
