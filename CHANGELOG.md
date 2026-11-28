@@ -5,6 +5,13 @@ top.
 
 ## Unreleased
 
+- **Further settings, where the bridge opens them** (bridge contract version 7): presets `eco`,
+  `holiday` and `antifrost` on the climates (the presets open on every member); per thermostat
+  and per room, `switch` child lock and open-window detection, `number` temperature calibration
+  and holiday setpoint. Each appears only once the bridge lists it as open for the thermostat
+  (for a room: for every member), shows only what the device reported, and writes one confirmed
+  command per member. Diagnostics map a trial thermostat's name to its number.
+
 - **Moves between bridges** (milestone M5). A thermostat listed by both bridges at once is shown
   from one only: the bridge that held it while it is usable there, the other listing (a
   *shadow*) taking over when it is not, or when the first stops listing it. Nothing is written

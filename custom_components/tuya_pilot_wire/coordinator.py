@@ -3,11 +3,12 @@
 For each configured prefix it reads `bridge/state`, `bridge/info`, `bridge/devices`, the state
 topic of each thermostat and its `availability`. The read side needs no request to the bridge.
 
-It publishes `/set` commands (`async_set_many`) only when `supports_set` allows it, and the
-weekly-schedule requests of contract §5: `schedule/get` (`async_get_schedule`) and, only when
-`supports_schedule_set` allows it, `schedule/set` (`async_set_schedule_many`). One thermostat
-after the other, each answered by the bridge. A command never changes the state held here; the
-state changes when the bridge publishes what the device confirmed.
+It publishes `/set` commands (`async_set_many`) only when `supports_set` (and, for a preset value,
+`open_presets`) allows it, and the weekly-schedule requests of contract §5: `schedule/get`
+(`async_get_schedule`) and, only when `supports_schedule_set` allows it, `schedule/set`
+(`async_set_schedule_many`). One thermostat after the other, each answered by the bridge. A
+command never changes the state held here; the state changes when the bridge publishes what the
+device confirmed.
 
 Reading rules, all on the side of "an entity never lies":
 
@@ -39,10 +40,13 @@ from . import schedule
 from .const import (
     DOMAIN,
     MIN_SET_INTERVAL,
+    PRESETS_OF_V5,
     SCHEDULE_GET,
     SCHEDULE_SET,
     SCHEDULE_TIMEOUT,
     SET_BOUNDS,
+    SET_CHOICES,
+    SET_INTEGER_KEYS,
     SET_KEYS,
     SET_PRESETS,
     SET_TIMEOUT,
@@ -210,8 +214,8 @@ class CompanionCoordinator:
         """``(keys, friendly names)`` the bridge of ``prefix`` announces open; empty when closed.
 
         Open means `read_only` is `false` in its `bridge/info`, and then `writes.keys` and
-        `writes.devices` say what and for whom (contract version 5). A version-4 bridge names a
-        single `writes.device`, read as a list of one.
+        `writes.devices` say what and for whom (contract versions 5 to 7). A version-4 bridge
+        names a single `writes.device`, read as a list of one.
         """
         info = self.bridge_info.get(prefix, {})
         writes = info.get("writes")
@@ -239,6 +243,23 @@ class CompanionCoordinator:
             return False
         keys, devices = self.open_writes(thermostat.prefix)
         return set_key in keys and thermostat.friendly_name in devices
+
+    def open_presets(self, key: str) -> frozenset[str]:
+        """The presets the Companion may write to this thermostat; empty unless `preset` is open.
+
+        They are those of `writes.presets` (contract version 7) that the Companion can build. A
+        version-5 bridge has no such list and opens `manual` and `program` only; a list that is
+        not a list opens none. `writes.trial` is never read: a trial is the owner's, by hand.
+        """
+        if not self.supports_set(key, "preset"):
+            return frozenset()
+        writes = self.bridge_info[self.thermostats[key].prefix]["writes"]
+        if "presets" not in writes:
+            return PRESETS_OF_V5
+        presets = writes["presets"]
+        if not isinstance(presets, list):
+            return frozenset()
+        return frozenset(p for p in presets if isinstance(p, str) and p in SET_PRESETS)
 
     def supports_schedule_get(self, key: str) -> bool:
         """True when the thermostat's bridge says its developer channel is online."""
@@ -275,9 +296,10 @@ class CompanionCoordinator:
         return thermostat.friendly_name if thermostat is not None else key
 
     @staticmethod
-    def _check_value(set_key: str, value: Any) -> None:
+    def _checked_value(set_key: str, value: Any) -> Any:
+        """The value to publish for ``set_key``; raises when it is not one the key takes."""
         if set_key == "preset":
-            if value not in SET_PRESETS:
+            if not isinstance(value, str) or value not in SET_PRESETS:
                 raise ServiceValidationError(
                     translation_domain=DOMAIN,
                     translation_key="preset_not_writable",
@@ -286,19 +308,36 @@ class CompanionCoordinator:
                         "presets": ", ".join(SET_PRESETS),
                     },
                 )
-            return
+            return value
+        if set_key in SET_CHOICES:
+            if not isinstance(value, str) or value not in SET_CHOICES[set_key]:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="value_not_allowed",
+                    translation_placeholders={
+                        "key": set_key,
+                        "value": str(value),
+                        "values": ", ".join(SET_CHOICES[set_key]),
+                    },
+                )
+            return value
         low, high, step = SET_BOUNDS[set_key]
-        steps = (value - low) / step
-        if not low <= value <= high or abs(steps - round(steps)) > 1e-6:
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not low <= value <= high
+            or abs((value - low) / step - round((value - low) / step)) > 1e-6
+        ):
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="value_out_of_bounds",
                 translation_placeholders={"low": str(low), "high": str(high), "step": str(step)},
             )
+        return round(value) if set_key in SET_INTEGER_KEYS else value
 
-    def _check(self, keys: list[str], set_key: str, value: Any) -> list[Thermostat]:
+    def _check(self, keys: list[str], set_key: str, value: Any) -> tuple[list[Thermostat], Any]:
         """Every refusal that needs no bridge, for all thermostats at once. Raises, or returns
-        the thermostats to write to, in order."""
+        the thermostats to write to, in order, and the value to publish."""
         if not keys:
             raise ServiceValidationError(
                 translation_domain=DOMAIN, translation_key="no_write_route"
@@ -322,7 +361,19 @@ class CompanionCoordinator:
                     "thermostats": ", ".join(self.name_of(key) for key in unusable)
                 },
             )
-        self._check_value(set_key, value)
+        value = self._checked_value(set_key, value)
+        if set_key == "preset":
+            # Each preset value is opened on its own (`writes.presets`).
+            shut = [key for key in keys if value not in self.open_presets(key)]
+            if shut:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="preset_closed",
+                    translation_placeholders={
+                        "preset": value,
+                        "thermostats": ", ".join(self.name_of(key) for key in shut),
+                    },
+                )
         thermostats = [self.thermostats[key] for key in keys]
         if set_key == "current_heating_setpoint":
             # In any other preset the device does not keep a written setpoint (contract §4).
@@ -337,28 +388,29 @@ class CompanionCoordinator:
                         )
                     },
                 )
-        return thermostats
+        return thermostats, value
 
     async def async_set(self, key: str, set_key: str, value: Any) -> None:
         """WRITE. One ``/set`` key to one thermostat; see `async_set_many`.
 
         The bridge's refusal or silence is raised as is (`set_refused`, `set_no_answer`).
         """
-        (thermostat,) = self._check([key], set_key, value)
+        (thermostat,), value = self._check([key], set_key, value)
         await self._send(thermostat, set_key, value)
 
     async def async_set_many(self, keys: list[str], set_key: str, value: Any) -> None:
         """WRITE. Publish one ``/set`` key to several thermostats and wait for each answer.
 
         Refused before anything is published when the bridge does not announce the key open for
-        **every** thermostat, when one is not usable, when the value is outside the key's bounds,
-        or, for the manual setpoint, when one thermostat is not in `manual`. Then one command per
-        thermostat, one after the other (the bridge writes and reads back one device at a time),
-        each with its own transaction and up to ``SET_TIMEOUT`` for its answer. A thermostat
-        that is refused or not confirmed does not stop the others; the call then fails naming
-        every thermostat not confirmed. Never touches the state held here.
+        **every** thermostat, when one is not usable, when the value is not one the key takes
+        (bounds and step, the two values of a switch, a preset the bridge does not open for each
+        thermostat), or, for the manual setpoint, when one thermostat is not in `manual`. Then one
+        command per thermostat, one after the other (the bridge writes and reads back one device
+        at a time), each with its own transaction and up to ``SET_TIMEOUT`` for its answer. A
+        thermostat that is refused or not confirmed does not stop the others; the call then fails
+        naming every thermostat not confirmed. Never touches the state held here.
         """
-        thermostats = self._check(keys, set_key, value)
+        thermostats, value = self._check(keys, set_key, value)
         if len(thermostats) == 1:
             await self._send(thermostats[0], set_key, value)
             return

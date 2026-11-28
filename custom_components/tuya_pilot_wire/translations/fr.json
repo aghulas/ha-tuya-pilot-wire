@@ -116,7 +116,10 @@
             "name": "Mode",
             "state": {
               "program": "Programme",
-              "manual": "Manuel"
+              "manual": "Manuel",
+              "eco": "Éco",
+              "holiday": "Vacances",
+              "antifrost": "Hors-gel"
             }
           },
           "schedule": {
@@ -176,6 +179,20 @@
     "number": {
       "manual_setpoint": {
         "name": "Consigne manuelle"
+      },
+      "local_temperature_calibration": {
+        "name": "Correction de température"
+      },
+      "holiday_temperature": {
+        "name": "Consigne vacances"
+      }
+    },
+    "switch": {
+      "child_lock": {
+        "name": "Verrouillage enfant"
+      },
+      "window_detection": {
+        "name": "Détection de fenêtre ouverte"
       }
     }
   },
@@ -224,6 +241,12 @@
     },
     "set_not_confirmed": {
       "message": "Non confirmé par le pont : {failed}. Confirmé : {confirmed}. L'état affiché est celui que les appareils ont confirmé."
+    },
+    "preset_closed": {
+      "message": "Le pont n'ouvre pas le mode « {preset} » pour : {thermostats}. Rien n'a été envoyé."
+    },
+    "value_not_allowed": {
+      "message": "{key} prend {values}, pas « {value} » : rien n'a été envoyé."
     },
     "schedule_unavailable": {
       "message": "Le pont ne peut pas lire le programme de {thermostats} maintenant : son canal développeur n'est pas en ligne. Rien n'a été envoyé."

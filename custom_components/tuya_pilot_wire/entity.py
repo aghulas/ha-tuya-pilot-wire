@@ -216,3 +216,137 @@ def async_setup_described(
 
     entry.async_on_unload(data.coordinator.async_add_listener(discover))
     discover()
+
+
+class ThermostatSettingEntity(ThermostatEntity):
+    """A setting of one thermostat, whose `/set` key is its description key.
+
+    Available only while the bridge opens the key for the thermostat and the thermostat reports
+    the value. The value is ``reported``, not ``value``: `NumberEntity` owns that name.
+    """
+
+    entity_description: CompanionDescription
+
+    def __init__(self, data: CompanionData, key: str, description: CompanionDescription) -> None:
+        super().__init__(data, key, description.key)
+        self.entity_description = description
+
+    @property
+    def reported(self) -> Any:
+        thermostat = self.thermostat
+        fn = self.entity_description.thermostat_fn
+        return fn(thermostat) if thermostat is not None and fn is not None else None
+
+    @property
+    def available(self) -> bool:
+        return (
+            self._data.coordinator.supports_set(self._key, self.entity_description.key)
+            and self.reported is not None
+        )
+
+    async def async_write(self, value: Any) -> None:
+        """WRITE. One command; the state follows the device's confirmation."""
+        await self._data.coordinator.async_set_many([self._key], self.entity_description.key, value)
+
+
+class RoomSettingEntity(RoomEntity):
+    """A setting of a room: open only when open for every member, sent to each in turn.
+
+    Its value is the members' common one (`RoomState`): unavailable when one member does not
+    report it, or when they disagree (the room's "Thermostats disagree" then names it).
+    """
+
+    entity_description: CompanionDescription
+
+    def __init__(
+        self, data: CompanionData, room_id: str, description: CompanionDescription
+    ) -> None:
+        super().__init__(data, room_id, description.key)
+        self.entity_description = description
+
+    @property
+    def reported(self) -> Any:
+        state = self.room_state
+        fn = self.entity_description.room_fn
+        return fn(state) if state is not None and fn is not None else None
+
+    @property
+    def available(self) -> bool:
+        state = self.room_state
+        return (
+            state is not None
+            and state.setting_open(self.entity_description.key)
+            and self.reported is not None
+        )
+
+    async def async_write(self, value: Any) -> None:
+        """WRITE. One command per member (`async_set_many`); the state follows the devices."""
+        room = self._data.store.rooms.get(self._room_id)
+        members = list(room.members) if room is not None else []
+        await self._data.coordinator.async_set_many(members, self.entity_description.key, value)
+
+
+@callback
+def async_setup_settings(
+    hass: HomeAssistant,
+    entry: CompanionConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+    domain: str,
+    descriptions: tuple[CompanionDescription, ...],
+    thermostat_cls: Callable[[CompanionData, str, Any], Entity],
+    room_cls: Callable[[CompanionData, str, Any], Entity],
+) -> None:
+    """Create a setting's entities once a bridge opens its key, and those the registry has.
+
+    A thermostat's entity appears once its bridge opens the key for it (in a room or not); a
+    room's, once the key is open for every member. Neither is removed when the key closes again:
+    it is unavailable.
+    """
+    data = entry.runtime_data
+    coordinator = data.coordinator
+    by_key = {description.key: description for description in descriptions}
+    known: set[str] = set()
+
+    def build(owner: str, description: CompanionDescription) -> Entity | None:
+        unique_id = f"{owner}_{description.key}"
+        if unique_id in known:
+            return None
+        if owner.startswith(ROOM_PREFIX):
+            room_id = owner.removeprefix(ROOM_PREFIX)
+            if room_id not in data.store.rooms:
+                return None
+            known.add(unique_id)
+            return room_cls(data, room_id, description)
+        known.add(unique_id)
+        return thermostat_cls(data, owner, description)
+
+    restored: list[Entity] = []
+    for registered in er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id):
+        if registered.domain != domain:
+            continue
+        parts = split_unique_id(registered.unique_id, by_key)
+        if parts and (entity := build(parts[0], by_key[parts[1]])) is not None:
+            restored.append(entity)
+    async_add_entities(restored)
+
+    @callback
+    def discover() -> None:
+        new: list[Entity] = []
+        for key in coordinator.thermostats:
+            for description in descriptions:
+                if coordinator.supports_set(key, description.key) and (
+                    entity := build(key, description)
+                ):
+                    new.append(entity)
+        for room in data.store.rooms.values():
+            state = RoomState(room, coordinator)
+            for description in descriptions:
+                if state.setting_open(description.key) and (
+                    entity := build(room_identifier(room.id), description)
+                ):
+                    new.append(entity)
+        if new:
+            async_add_entities(new)
+
+    entry.async_on_unload(coordinator.async_add_listener(discover))
+    discover()

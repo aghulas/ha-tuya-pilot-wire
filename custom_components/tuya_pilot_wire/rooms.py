@@ -5,8 +5,10 @@ values are computed from its members on demand (`RoomState`) and follow one rule
 given only when it is true of the room.
 
 - temperature: mean of the members that report one;
-- on / off, preset, target: the members' common value; nothing when one member's value is unknown;
-  nothing when they disagree, and the disagreement is named;
+- on / off, preset, target, and the settings a bridge can open (child lock, window detection,
+  calibration, holiday setpoint): the members' common value; nothing when one member's value is
+  unknown; nothing when they disagree, and the disagreement is named (for a setting, while the
+  room's control of it is open: otherwise nothing of the room depends on it);
 - heating, window, fault: true as soon as one member says so, false only when every member says
   not;
 - power, energy: sums, given only when **every** member reports the figure. A partial sum would
@@ -36,6 +38,13 @@ if TYPE_CHECKING:
     from .coordinator import CompanionCoordinator
 
 COMPARED = ("system_mode", "preset", "target_temperature")
+# The settings with a room control (`switch`, `number`); each name is also its `/set` key.
+SETTINGS = (
+    "child_lock",
+    "window_detection",
+    "local_temperature_calibration",
+    "holiday_temperature",
+)
 
 
 class RoomError(HomeAssistantError):
@@ -200,6 +209,7 @@ class RoomState:
 
     def __init__(self, room: Room, coordinator: CompanionCoordinator) -> None:
         self.room = room
+        self._coordinator = coordinator
         self.members: list[Thermostat] = [
             thermostat for key in room.members if (thermostat := coordinator.get(key)) is not None
         ]
@@ -238,9 +248,38 @@ class RoomState:
         return self._agreed("target_temperature")[0]
 
     @property
+    def child_lock(self) -> bool | None:
+        return self._agreed("child_lock")[0]
+
+    @property
+    def window_detection(self) -> bool | None:
+        return self._agreed("window_detection")[0]
+
+    @property
+    def local_temperature_calibration(self) -> float | None:
+        return self._agreed("local_temperature_calibration")[0]
+
+    @property
+    def holiday_temperature(self) -> float | None:
+        return self._agreed("holiday_temperature")[0]
+
+    def setting_open(self, set_key: str) -> bool:
+        """True when every stored member's bridge opens ``set_key`` for it."""
+        return bool(self.room.members) and all(
+            self._coordinator.supports_set(key, set_key) for key in self.room.members
+        )
+
+    @property
     def disagreements(self) -> list[str]:
-        """Names of the values the members do not share (``schedule`` for the schedule)."""
+        """Names of the values the members do not share (``schedule`` for the schedule).
+
+        A setting is named only while the room's control of it is open: it is then the reason
+        that control is unavailable.
+        """
         names = [name for name in COMPARED if not self._agreed(name)[1]]
+        names += [
+            name for name in SETTINGS if not self._agreed(name)[1] and self.setting_open(name)
+        ]
         return names + ["schedule"] if self.schedule_differing else names
 
     @property

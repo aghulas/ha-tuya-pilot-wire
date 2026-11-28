@@ -28,6 +28,9 @@ supervised trial ([`architecture.md`](architecture.md), "Rule for adding a route
   Companion v0.3.0 (2026-11-27): room writes, preset (`program` / `manual`) and manual setpoint,
   fanned out to every member and confirmed one by one; offered only where the bridge announces
   them open (`bridge/info.writes`, contract version 5). The trial option moves to the bridge.
+  Companion v0.5.0: builds the further settings of contract version 7 (presets `eco`, `holiday`,
+  `antifrost`; child lock, window detection, calibration, holiday setpoint), each offered only
+  once the bridge opens it after its supervised trial; none is open yet.
 
 - **M5** — prepared 2026-11-28, not run: a read-only external converter for Zigbee2MQTT
   ([`zigbee2mqtt/`](../zigbee2mqtt/), tested on synthetic frames), the parity table between the
