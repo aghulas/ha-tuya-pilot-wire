@@ -3,7 +3,7 @@
 Every version is a tag and a GitHub release of this repository. Unreleased changes are at the
 top.
 
-## Unreleased
+## 0.5.0 — 2026-11-28
 
 - **Further settings, where the bridge opens them** (bridge contract version 7): presets `eco`,
   `holiday` and `antifrost` on the climates (the presets open on every member); per thermostat
@@ -11,6 +11,10 @@ top.
   and holiday setpoint. Each appears only once the bridge lists it as open for the thermostat
   (for a room: for every member), shows only what the device reported, and writes one confirmed
   command per member. Diagnostics map a trial thermostat's name to its number.
+
+Proven on the reference install by supervised trials through the bridge (bridge 0.5.1):
+`holiday`, `eco`, child lock, window detection, calibration, holiday setpoint
+([`docs/validation/`](docs/validation/)). `antifrost` stays closed: the sharing API refuses it.
 
 - **Moves between bridges** (milestone M5). A thermostat listed by both bridges at once is shown
   from one only: the bridge that held it while it is usable there, the other listing (a
