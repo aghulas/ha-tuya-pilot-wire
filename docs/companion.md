@@ -235,6 +235,10 @@ What it does:
 4. returns, by thermostat, `confirmed` and the schedule read back. The attributes follow when
    the bridge publishes the state again (right after the write).
 
+The route is proven through the bridge on real hardware
+([trial 6](validation/2026-11-28-trial-6-weekly-schedule.md)): the six schedules read, one day
+written on one thermostat and restored, each confirmed in 5 to 11 s.
+
 No card or panel edits the schedule in this version: the service, from the Developer tools
 ("Actions") or a script, is the way to change it, and `get_schedule` the way to read it whole.
 
