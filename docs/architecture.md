@@ -70,8 +70,8 @@ refuses the command and the Companion shows no entity for it.
 |---|---|---|
 | Read state | sharing API (proven); LAN for power and energy (proven) | to establish (M5: needs a converter, [`device.md`](device.md)) |
 | On / off | sharing API (proven) | |
-| Mode | sharing API (proven) | |
-| Manual setpoint | sharing API (proven; not applied in frost-protection mode) | |
+| Mode | sharing API (proven); `manual` / `program` through the bridge, proven on two thermostats ([trial 2](validation/2026-11-28-trial-2-preset-and-setpoint.md)) | |
+| Manual setpoint | sharing API (proven; not applied in frost-protection mode); through the bridge, in `manual` only, proven on two thermostats ([trial 2](validation/2026-11-28-trial-2-preset-and-setpoint.md)) | |
 | Holiday setpoint, temperature correction, window detection, child lock | declared by the sharing API, not tried | |
 | Eco / frost setpoints, night mode | read by LAN and developer API; no write tried | |
 | Weekly schedule | developer API (proven on one thermostat) | |
