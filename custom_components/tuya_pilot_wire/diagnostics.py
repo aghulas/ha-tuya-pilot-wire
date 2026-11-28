@@ -91,6 +91,17 @@ async def async_get_config_entry_diagnostics(
             "online": thermostat.online,
             "available": coordinator.available(key),
             "state": async_redact_data(thermostat.state, TO_REDACT),
+            # Also listed by a second bridge (a move between bridges in progress), and whether
+            # that listing is usable there.
+            "shadow": (
+                {
+                    "bridge": shadow.prefix,
+                    "online": shadow.online,
+                    "has_ieee_address": shadow.ieee_address is not None,
+                }
+                if (shadow := coordinator.shadows.get(key)) is not None
+                else None
+            ),
         }
         for key, thermostat in coordinator.thermostats.items()
     ]

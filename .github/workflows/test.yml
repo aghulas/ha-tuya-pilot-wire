@@ -15,3 +15,16 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: ruff check . && ruff format --check .
       - run: pytest -q
+
+  converter:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: zigbee2mqtt
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci --ignore-scripts
+      - run: npm test

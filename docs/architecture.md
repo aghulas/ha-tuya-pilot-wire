@@ -68,7 +68,7 @@ refuses the command and the Companion shows no entity for it.
 
 | Operation | Tuya gateway (`tuyapilot2mqtt`) | Zigbee2MQTT |
 |---|---|---|
-| Read state | sharing API (proven); LAN for power and energy (proven) | to establish (M5: needs a converter, [`device.md`](device.md)) |
+| Read state | sharing API (proven); LAN for power and energy (proven) | external converter written, read only, not run on a device yet ([`z2m-parity.md`](z2m-parity.md)); the mode index table is measured on site |
 | On / off | sharing API (proven) | |
 | Mode | sharing API (proven); `manual` / `program` through the bridge, proven on two thermostats ([trial 2](validation/2026-11-28-trial-2-preset-and-setpoint.md)) | |
 | Manual setpoint | sharing API (proven; not applied in frost-protection mode); through the bridge, in `manual` only, proven on two thermostats ([trial 2](validation/2026-11-28-trial-2-preset-and-setpoint.md)) | |
