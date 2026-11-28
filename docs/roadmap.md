@@ -36,7 +36,11 @@ supervised trial ([`architecture.md`](architecture.md), "Rule for adding a route
   ([`zigbee2mqtt/`](../zigbee2mqtt/), tested on synthetic frames), the parity table between the
   two bridges ([`z2m-parity.md`](z2m-parity.md)), the Companion's handling of a thermostat
   listed by both bridges and of a new device id on the way back, and the on-site procedure
-  ([`z2m-trial-procedure.md`](z2m-trial-procedure.md)). Waits for the owner's slot on site.
+  ([`z2m-trial-procedure.md`](z2m-trial-procedure.md)).
+  **Postponed** (2026-11-28): the on-site Zigbee network needs new coordinator dongles before a
+  thermostat joins it. The checks done remotely that day stand (the thermostats' IEEE addresses
+  are known to the Companion, the converter loads in Zigbee2MQTT 2.14.3 without a restart);
+  no thermostat left its gateway.
 
 ## Order of work
 
