@@ -3,8 +3,13 @@
 Every version is a tag and a GitHub release of this repository. Unreleased changes are at the
 top.
 
-## Unreleased
+## 0.4.0 — 2026-11-28
 
+- **Weekly schedule** (contract version 6 of the bridge): attributes `schedule` and
+  `schedule_read_at` per thermostat, `schedule` and `schedule_differing_days` per room;
+  services `tuya_pilot_wire.get_schedule` and `set_schedule` (fan-out one thermostat after the
+  other, confirmed by the read-back). Opened only by a bridge that announces it; a version-5
+  bridge opens nothing.
 - **Moves between bridges** (milestone M5). A thermostat listed by both bridges at once is shown
   from one only: the bridge that held it while it is usable there, the other listing (a
   *shadow*) taking over when it is not, or when the first stops listing it. Nothing is written
