@@ -5,7 +5,9 @@ Status: the read side is built, tested against synthetic messages that follow th
 runs on the reference install. Since v0.3.0 two writes are built, the preset (`program` /
 `manual`) and the manual setpoint, on room and thermostat climates. **The Companion opens none by
 itself**: each is offered for a thermostat only while its bridge announces it open for that
-thermostat (see "Writes" below).
+thermostat (see "Writes" below). Since v0.4.0 the **weekly schedule** is read per thermostat and
+per room, and written by the service `set_schedule`, open only where the bridge opens it (see
+"Weekly schedule" below).
 
 ## What it reads
 
@@ -104,7 +106,8 @@ by the room's.
 |---|---|---|
 | `preset` | `program`, `manual` (the raw names of the mode sensor; `eco`, `holiday`, `antifrost` are read, never written) | `climate.set_preset_mode` |
 | `current_heating_setpoint` | 5–30 °C, step 0.5 (the device takes up to 40; the bridge stops at 30) | `climate.set_temperature`, the "Manual setpoint" `number` |
-| everything else (on / off, child lock, schedule…) | — | not built |
+| the weekly schedule | days described in full | the service `tuya_pilot_wire.set_schedule` ("Weekly schedule" below) |
+| everything else (on / off, child lock…) | — | not built |
 
 **Who opens a write: the bridge.** `const.SET_KEYS` is what the Companion can build and check; a
 key is published to a thermostat only while that thermostat's bridge publishes, in
@@ -155,6 +158,71 @@ the one wanted (seen at 21 °C on one thermostat in
 [trial 2](validation/2026-11-28-trial-2-preset-and-setpoint.md)). Send the setpoint right after
 the preset, and if that call fails, set the preset back to `program` rather than leave the room
 heating on the kept value.
+
+## Weekly schedule
+
+The schedule lives in data points only the bridge's **developer channel** reads (contract §5,
+version 6). The Companion never asks for it on its own: it shows what the bridge publishes, and
+reads or writes it when a service is called.
+
+**Read.** The bridge reads each thermostat's schedule once an hour, with its eco and frost
+setpoints, and publishes it in the state object (`tuya.schedule`, `tuya.read.schedule.at`). The
+Companion shows it as attributes, kept out of the recorder (a few kilobytes that change rarely):
+
+| Climate | Attributes |
+|---|---|
+| a thermostat outside any room | `schedule` (`{monday: [{time, temperature}, …], …}`), `schedule_read_at` |
+| a room | `schedule`: the days **every** member holds the same; `schedule_differing_days`: the days two members hold differently, and `schedule` then joins `differing` (the room's "Thermostats disagree" sensor turns on) |
+
+A thermostat whose bridge never read the schedule has `schedule: null`, and so has its room: an
+unknown member leaves the room's schedule unknown, as for any room value. A change made in the
+Tuya app shows within the hour, or at once after `get_schedule` with `refresh`.
+
+**`tuya_pilot_wire.get_schedule`** (`room` or `thermostat`, optional `refresh`): returns the
+schedule of each thermostat with when it was read, and for a room the days shared and the days
+that differ. With `refresh: true` it sends `bridge/request/schedule/get` for each thermostat and
+returns what the bridge read now; refused while the bridge's developer channel is not `online`.
+
+**`tuya_pilot_wire.set_schedule`** — WRITE. Target: `room` (every member) or `thermostat`. The
+days, either:
+
+- `days` and `transitions`: the same day for each day named, e.g. a weekend;
+- `schedule`: each day its own changes, `{saturday: [...], sunday: [...]}`.
+
+A day is its setpoint changes, **described in full**: the first at `00:00`, times on a
+15-minute step, temperatures 5–30 °C by 0.5. The days not given stay as they are on the
+thermostat.
+
+```yaml
+action: tuya_pilot_wire.set_schedule
+data:
+  room: Library
+  days: [saturday, sunday]
+  transitions:
+    - {time: "00:00", temperature: 7}
+    - {time: "08:00", temperature: 17}
+    - {time: "12:00", temperature: 7}
+response_variable: written
+```
+
+What it does:
+
+1. checks before anything is published: every day is described as above (the same rules as the
+   bridge's library), the bridge lists `schedule/set` in `bridge/info.writes.requests` and the
+   thermostat in `writes.devices` — for **every** thermostat of a room — and each is usable. A
+   refusal publishes nothing and names the day or the thermostats;
+2. publishes `bridge/request/schedule/set` `{"device": …, "days": {…}, "transaction": …}` for
+   each thermostat, **one after the other**, 10 s apart for the same thermostat (the bridge
+   counts a schedule write in its rate limit);
+3. waits up to 60 s for each answer (the bridge writes, then reads the schedule back for up to
+   30 s). Confirmed means `"status": "ok"`, `confirmed: true`, **and** every day asked found as
+   asked in the schedule read back. A thermostat refused or not confirmed does not stop the
+   others; the call then fails naming each, with the bridge's reason;
+4. returns, by thermostat, `confirmed` and the schedule read back. The attributes follow when
+   the bridge publishes the state again (right after the write).
+
+No card or panel edits the schedule in this version: the service, from the Developer tools
+("Actions") or a script, is the way to change it, and `get_schedule` the way to read it whole.
 
 ## Diagnostics
 
