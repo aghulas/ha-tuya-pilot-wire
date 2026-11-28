@@ -25,6 +25,10 @@ manual setpoint, fanned out to a room's members. Each is offered only for the th
 bridge announces it open for; the bridge holds the owner's designation and the supervised trials.
 
 - [`docs/companion.md`](docs/companion.md) — what the integration reads, its entities, rooms;
+- [`docs/z2m-parity.md`](docs/z2m-parity.md) and [`zigbee2mqtt/`](zigbee2mqtt/) — the
+  Zigbee2MQTT path: a read-only external converter, what changes when a thermostat moves between
+  bridges (milestone M5, not run on a device yet);
+- [`CHANGELOG.md`](CHANGELOG.md) — what each version changed;
 - [`docs/device.md`](docs/device.md) — the thermostat: Zigbee fingerprint, Zigbee2MQTT support;
 - [`docs/scope.md`](docs/scope.md) — goal, hardware in scope, what is known from real hardware,
   principles, open questions;
