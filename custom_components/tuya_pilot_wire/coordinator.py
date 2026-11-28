@@ -3,10 +3,11 @@
 For each configured prefix it reads `bridge/state`, `bridge/info`, `bridge/devices`, the state
 topic of each thermostat and its `availability`. The read side needs no request to the bridge.
 
-It publishes one thing, and only when `supports_set` allows it: `/set` commands
-(`async_set_many`), one thermostat after the other, each answered by the bridge. A command never
-changes the state held here; the state changes when the bridge publishes what the device
-confirmed.
+It publishes `/set` commands (`async_set_many`) only when `supports_set` allows it, and the
+weekly-schedule requests of contract §5: `schedule/get` (`async_get_schedule`) and, only when
+`supports_schedule_set` allows it, `schedule/set` (`async_set_schedule_many`). One thermostat
+after the other, each answered by the bridge. A command never changes the state held here; the
+state changes when the bridge publishes what the device confirmed.
 
 Reading rules, all on the side of "an entity never lies":
 
@@ -30,7 +31,18 @@ from homeassistant.components import mqtt
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
-from .const import DOMAIN, MIN_SET_INTERVAL, SET_BOUNDS, SET_KEYS, SET_PRESETS, SET_TIMEOUT
+from . import schedule
+from .const import (
+    DOMAIN,
+    MIN_SET_INTERVAL,
+    SCHEDULE_GET,
+    SCHEDULE_SET,
+    SCHEDULE_TIMEOUT,
+    SET_BOUNDS,
+    SET_KEYS,
+    SET_PRESETS,
+    SET_TIMEOUT,
+)
 from .model import (
     PRESET_MANUAL,
     Thermostat,
@@ -219,6 +231,35 @@ class CompanionCoordinator:
         keys, devices = self.open_writes(thermostat.prefix)
         return set_key in keys and thermostat.friendly_name in devices
 
+    def supports_schedule_get(self, key: str) -> bool:
+        """True when the thermostat's bridge says its developer channel is online."""
+        thermostat = self.thermostats.get(key)
+        if thermostat is None:
+            return False
+        channels = self.bridge_info.get(thermostat.prefix, {}).get("channels")
+        developer = channels.get("developer") if isinstance(channels, dict) else None
+        return isinstance(developer, dict) and developer.get("state") == "online"
+
+    def supports_schedule_set(self, key: str) -> bool:
+        """True when the Companion may send ``schedule/set`` for this thermostat.
+
+        Its bridge must list ``schedule/set`` in `writes.requests` and the thermostat in
+        `writes.devices` (contract version 6). `read_only` is about `/set`, not this request.
+        """
+        thermostat = self.thermostats.get(key)
+        if thermostat is None:
+            return False
+        writes = self.bridge_info.get(thermostat.prefix, {}).get("writes")
+        if not isinstance(writes, dict):
+            return False
+        requests, devices = writes.get("requests"), writes.get("devices")
+        return (
+            isinstance(requests, list)
+            and SCHEDULE_SET in requests
+            and isinstance(devices, list)
+            and thermostat.friendly_name in devices
+        )
+
     def name_of(self, key: str) -> str:
         """The bridge name of a thermostat, or its key when no bridge lists it."""
         thermostat = self.thermostats.get(key)
@@ -332,16 +373,154 @@ class CompanionCoordinator:
                 },
             )
 
+    # -- weekly schedule --------------------------------------------------------------------
+
+    async def async_get_schedule(self, key: str) -> dict[str, list[dict[str, Any]]]:
+        """Ask the bridge to read the schedule of one thermostat now. Raises unless it answers."""
+        thermostat = self.thermostats.get(key)
+        if thermostat is None or not self.supports_schedule_get(key):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="schedule_unavailable",
+                translation_placeholders={"thermostats": self.name_of(key)},
+            )
+        response = await self._request(
+            thermostat, SCHEDULE_GET, {"device": thermostat.friendly_name}
+        )
+        data = response.get("data")
+        week = schedule.read(data.get("schedule") if isinstance(data, dict) else None)
+        if response.get("status") != "ok" or week is None:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="schedule_refused",
+                translation_placeholders={
+                    "error": str(response.get("error") or "no schedule in the answer")
+                },
+            )
+        return week
+
+    async def async_set_schedule_many(
+        self, keys: list[str], days: dict[str, Any]
+    ) -> dict[str, dict[str, Any]]:
+        """WRITE. The given days of the weekly schedule, to several thermostats, one by one.
+
+        Refused before anything is published when a day is not described in full (checked here
+        as the bridge would), when the bridge does not open ``schedule/set`` for **every**
+        thermostat, or when one is not usable. Then one request per thermostat, one after the
+        other, ``MIN_SET_INTERVAL`` apart for the same thermostat, each waiting up to
+        ``SCHEDULE_TIMEOUT`` for the answer. A thermostat refused or not confirmed does not stop
+        the others; the call then fails naming each. Returns the schedule read back, by bridge
+        name.
+        """
+        try:
+            checked = schedule.normalise(days)
+        except schedule.ScheduleError as err:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key=err.code,
+                translation_placeholders=err.placeholders,
+            ) from err
+        if not keys:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="no_write_route"
+            )
+        closed = [key for key in keys if not self.supports_schedule_set(key)]
+        if closed:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="schedule_closed",
+                translation_placeholders={
+                    "thermostats": ", ".join(self.name_of(key) for key in closed)
+                },
+            )
+        unusable = [key for key in keys if self.get(key) is None]
+        if unusable:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="thermostat_unavailable",
+                translation_placeholders={
+                    "thermostats": ", ".join(self.name_of(key) for key in unusable)
+                },
+            )
+        results: dict[str, dict[str, Any]] = {}
+        failed: list[str] = []
+        for key in keys:
+            thermostat = self.thermostats[key]
+            await self._space(thermostat)
+            try:
+                response = await self._request(
+                    thermostat,
+                    SCHEDULE_SET,
+                    {"device": thermostat.friendly_name, "days": checked},
+                )
+            except HomeAssistantError:
+                failed.append(f"{thermostat.friendly_name} (no answer)")
+                continue
+            data = response.get("data")
+            data = data if isinstance(data, dict) else {}
+            week = schedule.read(data.get("schedule"))
+            confirmed = response.get("status") == "ok" and data.get("confirmed") is True
+            # Read back as asked, day by day: what the bridge says it read, checked again here.
+            if confirmed and (
+                week is None or any(week.get(day) != value for day, value in checked.items())
+            ):
+                confirmed = False
+            results[thermostat.friendly_name] = {"confirmed": confirmed, "schedule": week}
+            if not confirmed:
+                reason = response.get("error") or "the schedule read back differs"
+                failed.append(f"{thermostat.friendly_name} ({reason})")
+        if failed:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="schedule_not_confirmed",
+                translation_placeholders={
+                    "failed": "; ".join(failed),
+                    "confirmed": ", ".join(
+                        name for name, result in results.items() if result["confirmed"]
+                    )
+                    or "none",
+                },
+            )
+        return results
+
+    async def _space(self, thermostat: Thermostat) -> None:
+        """Wait until ``MIN_SET_INTERVAL`` has passed since the last write to the thermostat."""
+        last = self._last_sent.get(thermostat.key)
+        if last is not None and (delay := last + MIN_SET_INTERVAL - time.monotonic()) > 0:
+            await asyncio.sleep(delay)
+        self._last_sent[thermostat.key] = time.monotonic()
+
+    async def _request(
+        self, thermostat: Thermostat, action: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Publish one ``bridge/request/<action>`` and wait for its answer (any status)."""
+        transaction = uuid.uuid4().hex
+        answer: asyncio.Future[dict[str, Any]] = self.hass.loop.create_future()
+        self._pending[transaction] = answer
+        try:
+            await mqtt.async_publish(
+                self.hass,
+                f"{thermostat.prefix}/bridge/request/{action}",
+                json.dumps(payload | {"transaction": transaction}),
+                qos=1,
+                retain=False,
+            )
+            async with asyncio.timeout(SCHEDULE_TIMEOUT):
+                return await answer
+        except TimeoutError as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="set_no_answer"
+            ) from err
+        finally:
+            self._pending.pop(transaction, None)
+
     async def _send(self, thermostat: Thermostat, set_key: str, value: Any) -> None:
         """Publish one command and wait for the bridge's answer. Raises unless confirmed.
 
         Waits first until ``MIN_SET_INTERVAL`` has passed since the last command to the same
         thermostat, the bridge's own limit.
         """
-        last = self._last_sent.get(thermostat.key)
-        if last is not None and (delay := last + MIN_SET_INTERVAL - time.monotonic()) > 0:
-            await asyncio.sleep(delay)
-        self._last_sent[thermostat.key] = time.monotonic()
+        await self._space(thermostat)
         transaction = uuid.uuid4().hex
         answer: asyncio.Future[dict[str, Any]] = self.hass.loop.create_future()
         self._pending[transaction] = answer
@@ -401,7 +580,11 @@ class CompanionCoordinator:
                     self._notify()
         elif suffix == "bridge/devices":
             self._ingest_devices(prefix, payload)
-        elif suffix == "bridge/response/device/set":
+        elif suffix in (
+            "bridge/response/device/set",
+            f"bridge/response/{SCHEDULE_GET}",
+            f"bridge/response/{SCHEDULE_SET}",
+        ):
             response = _decode_json(payload)
             if isinstance(response, dict):
                 answer = self._pending.get(str(response.get("transaction")))

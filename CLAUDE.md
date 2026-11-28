@@ -40,7 +40,9 @@ climates (fan-out, one confirmed command per member) and a per-thermostat `numbe
 none by itself** (`SET_KEYS` is what it can build): a key reaches a thermostat only while its
 bridge announces it in `bridge/info` (`read_only: false`, `writes.keys`, `writes.devices`). The
 designation and the supervised trials live on the bridge (`~/dev/tuyapilot2mqtt`); the trial
-protocol is `docs/validation/trial-1-manual-setpoint-protocol.md`.
+protocol is `docs/validation/trial-1-manual-setpoint-protocol.md`. Since v0.4.0 the weekly schedule
+(contract 6, bridge developer channel): read as climate attributes, `get_schedule` /
+`set_schedule` services, `schedule/set` open only while `bridge/info.writes.requests` lists it.
 
 ## Quality
 

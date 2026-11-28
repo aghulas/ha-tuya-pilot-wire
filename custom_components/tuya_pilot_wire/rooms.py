@@ -10,7 +10,9 @@ given only when it is true of the room.
 - heating, window, fault: true as soon as one member says so, false only when every member says
   not;
 - power, energy: sums, given only when **every** member reports the figure. A partial sum would
-  read as a drop, which an energy counter must never show.
+  read as a drop, which an energy counter must never show;
+- weekly schedule: day by day, the members' common day; the days two members hold differently
+  are named.
 
 The store also remembers which IEEE address goes with which Tuya device id, so that a thermostat
 re-paired from the Tuya gateway to a Zigbee coordinator keeps its identity (milestone M5).
@@ -26,6 +28,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.storage import Store
 
+from . import schedule
 from .const import STORAGE_KEY, STORAGE_VERSION
 from .model import Thermostat
 
@@ -220,8 +223,21 @@ class RoomState:
 
     @property
     def disagreements(self) -> list[str]:
-        """Names of the values the members do not share."""
-        return [name for name in COMPARED if not self._agreed(name)[1]]
+        """Names of the values the members do not share (``schedule`` for the schedule)."""
+        names = [name for name in COMPARED if not self._agreed(name)[1]]
+        return names + ["schedule"] if self.schedule_differing else names
+
+    @property
+    def schedule(self) -> dict[str, list[dict[str, Any]]] | None:
+        """The days every member holds the same, or None while one member's is unknown."""
+        if not self.complete:
+            return None
+        return schedule.common([member.schedule for member in self.members])[0]
+
+    @property
+    def schedule_differing(self) -> list[str]:
+        """The days two members hold differently."""
+        return schedule.common([member.schedule for member in self.members])[1]
 
     @property
     def heating(self) -> bool | None:

@@ -23,6 +23,9 @@ thermostat and per room: temperature, setpoint, mode, heating, window, fault, po
 Two writes are built ([roadmap](docs/roadmap.md), M4): the preset (`program` / `manual`) and the
 manual setpoint, fanned out to a room's members. Each is offered only for the thermostats the
 bridge announces it open for; the bridge holds the owner's designation and the supervised trials.
+The weekly schedule is read per thermostat and per room (members that differ are named), and
+written by the service `tuya_pilot_wire.set_schedule` where the bridge opens it (bridge 0.4.0,
+developer channel).
 
 - [`docs/companion.md`](docs/companion.md) — what the integration reads, its entities, rooms;
 - [`docs/device.md`](docs/device.md) — the thermostat: Zigbee fingerprint, Zigbee2MQTT support;

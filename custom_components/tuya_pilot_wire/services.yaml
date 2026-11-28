@@ -39,3 +39,58 @@ delete_room:
         text:
 
 list_rooms:
+
+get_schedule:
+  fields:
+    room:
+      required: false
+      example: Library
+      selector:
+        text:
+    thermostat:
+      required: false
+      selector:
+        device:
+          integration: tuya_pilot_wire
+    refresh:
+      required: false
+      default: false
+      selector:
+        boolean:
+
+set_schedule:
+  fields:
+    room:
+      required: false
+      example: Library
+      selector:
+        text:
+    thermostat:
+      required: false
+      selector:
+        device:
+          integration: tuya_pilot_wire
+    days:
+      required: false
+      example: '["saturday", "sunday"]'
+      selector:
+        select:
+          multiple: true
+          options:
+            - monday
+            - tuesday
+            - wednesday
+            - thursday
+            - friday
+            - saturday
+            - sunday
+    transitions:
+      required: false
+      example: '[{"time": "00:00", "temperature": 7}, {"time": "07:30", "temperature": 19}, {"time": "17:00", "temperature": 7}]'
+      selector:
+        object:
+    schedule:
+      required: false
+      example: '{"saturday": [{"time": "00:00", "temperature": 7}]}'
+      selector:
+        object:
