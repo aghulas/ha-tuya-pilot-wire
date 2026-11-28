@@ -25,6 +25,9 @@ settings a bridge can open after their trial (child lock, window detection, temp
 calibration, holiday setpoint), fanned out to a room's members. Each is offered only for the
 thermostats the bridge announces it open for; the bridge holds the owner's designation and the
 supervised trials.
+The weekly schedule is read per thermostat and per room (members that differ are named), and
+written by the service `tuya_pilot_wire.set_schedule` where the bridge opens it (bridge 0.4.0,
+developer channel).
 
 - [`docs/companion.md`](docs/companion.md) — what the integration reads, its entities, rooms;
 - [`docs/z2m-parity.md`](docs/z2m-parity.md) and [`zigbee2mqtt/`](zigbee2mqtt/) — the

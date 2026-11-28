@@ -42,6 +42,12 @@
     },
     "list_rooms": {
       "service": "mdi:home-search"
+    },
+    "get_schedule": {
+      "service": "mdi:calendar-search"
+    },
+    "set_schedule": {
+      "service": "mdi:calendar-edit"
     }
   }
 }

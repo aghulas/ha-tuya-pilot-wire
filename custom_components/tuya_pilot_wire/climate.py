@@ -77,6 +77,8 @@ class _CompanionClimate(ClimateEntity):
     _data: CompanionData  # set by the thermostat or room base entity
     _attr_name = None
     _attr_translation_key = "thermostat"
+    # The schedule changes rarely and weighs a few kilobytes: kept out of the recorder.
+    _unrecorded_attributes = frozenset({"schedule", "schedule_read_at", "schedule_differing_days"})
     _attr_min_temp, _attr_max_temp, _attr_target_temperature_step = SET_BOUNDS[SETPOINT]
     # Home Assistant 2026.11 renamed the unit and temperature members (`native_…`) and warns
     # about the former names; earlier versions know only those.
@@ -216,6 +218,8 @@ class ThermostatClimate(ThermostatEntity, _CompanionClimate):
             "preset": thermostat.preset,
             "target_temperature": thermostat.target_temperature,
             **setpoints,
+            "schedule": thermostat.schedule,
+            "schedule_read_at": thermostat.schedule_read_at,
         }
 
 
@@ -245,6 +249,8 @@ class RoomClimate(RoomEntity, _CompanionClimate):
             "members": [member.friendly_name for member in state.members],
             "members_missing": state.missing,
             "differing": state.disagreements,
+            "schedule": state.schedule,
+            "schedule_differing_days": state.schedule_differing,
         }
 
 

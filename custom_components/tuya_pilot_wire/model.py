@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from . import schedule
 from .const import SUPPORTED_PRODUCT_IDS, ZIGBEE_MODEL_ID
 
 PRESET_PROGRAM = "program"
@@ -97,6 +98,21 @@ class Thermostat:
             return None
         name = _PRESET_SETPOINT.get(self.preset or "")
         return self.number(name) if name else None
+
+    @property
+    def schedule(self) -> dict[str, list[dict[str, Any]]] | None:
+        """The weekly schedule last read by the bridge (`tuya.schedule`), or None."""
+        extension = self.state.get("tuya")
+        return schedule.read(extension.get("schedule")) if isinstance(extension, dict) else None
+
+    @property
+    def schedule_read_at(self) -> str | None:
+        """When the bridge read the schedule (`tuya.read.schedule.at`), or None."""
+        extension = self.state.get("tuya")
+        read = extension.get("read") if isinstance(extension, dict) else None
+        entry = read.get("schedule") if isinstance(read, dict) else None
+        at = entry.get("at") if isinstance(entry, dict) else None
+        return at if isinstance(at, str) else None
 
     @property
     def heating(self) -> bool | None:

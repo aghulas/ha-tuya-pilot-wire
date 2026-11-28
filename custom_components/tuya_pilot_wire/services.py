@@ -1,7 +1,12 @@
-"""Room services: create, update, delete and list the rooms the Companion keeps.
+"""Services: the rooms the Companion keeps, and the weekly schedule.
 
-They change Home Assistant storage only; nothing is sent to a bridge or a thermostat. After a
-change the entry reloads, because the set of entities follows the rooms.
+The room services (create, update, delete, list) change Home Assistant storage only; nothing is
+sent to a bridge or a thermostat. After a change the entry reloads, because the set of entities
+follows the rooms.
+
+`get_schedule` gives the schedule of a room or a thermostat as last read by the bridge, or asks
+the bridge to read it now (`refresh`). `set_schedule` WRITES the given days to a room's members
+or a thermostat, one after the other, each confirmed by its bridge (contract §5).
 
 A room is named by its Home Assistant device id, its room id or its name; a thermostat by its
 Home Assistant device id, its key or its bridge name.
@@ -24,14 +29,22 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 
+from . import schedule
 from .const import (
+    ATTR_DAYS,
     ATTR_NAME,
+    ATTR_REFRESH,
     ATTR_ROOM,
+    ATTR_SCHEDULE,
+    ATTR_THERMOSTAT,
     ATTR_THERMOSTATS,
+    ATTR_TRANSITIONS,
     DOMAIN,
     SERVICE_CREATE_ROOM,
     SERVICE_DELETE_ROOM,
+    SERVICE_GET_SCHEDULE,
     SERVICE_LIST_ROOMS,
+    SERVICE_SET_SCHEDULE,
     SERVICE_UPDATE_ROOM,
 )
 from .entity import ROOM_PREFIX
@@ -107,9 +120,35 @@ def describe_room(data: CompanionData, room: Room) -> dict[str, Any]:
     }
 
 
+def _target(hass: HomeAssistant, data: CompanionData, call: ServiceCall) -> tuple[str, list[str]]:
+    """``(label, thermostat keys)`` of the room or the thermostat a schedule service names."""
+    if (ATTR_ROOM in call.data) == (ATTR_THERMOSTAT in call.data):
+        raise _refuse("schedule_target")
+    if ATTR_ROOM in call.data:
+        room = resolve_room(hass, data, call.data[ATTR_ROOM])
+        if not room.members:
+            raise _refuse("room_empty", room=room.name)
+        return room.name, list(room.members)
+    key = resolve_thermostat(hass, data, call.data[ATTR_THERMOSTAT])
+    return data.coordinator.name_of(key), [key]
+
+
+def _days_asked(call: ServiceCall) -> dict[str, Any]:
+    """The days to write: ``schedule`` (each day its changes), or ``days`` and ``transitions``
+    (the same changes for every day named)."""
+    if ATTR_SCHEDULE in call.data:
+        if ATTR_DAYS in call.data or ATTR_TRANSITIONS in call.data:
+            raise _refuse("schedule_input")
+        return dict(call.data[ATTR_SCHEDULE])
+    if ATTR_DAYS not in call.data or ATTR_TRANSITIONS not in call.data:
+        raise _refuse("schedule_input")
+    transitions = call.data[ATTR_TRANSITIONS]
+    return {day: transitions for day in call.data[ATTR_DAYS]}
+
+
 @callback
 def async_setup_services(hass: HomeAssistant) -> None:
-    """Register the room services."""
+    """Register the room and schedule services."""
 
     def changed(entry: CompanionConfigEntry, room: Room | None) -> ServiceResponse:
         # Described first: the reload replaces the fleet the names are read from.
@@ -160,6 +199,65 @@ def async_setup_services(hass: HomeAssistant) -> None:
             ),
         }
 
+    async def get_schedule(call: ServiceCall) -> ServiceResponse:
+        data = _loaded_entry(hass).runtime_data
+        coordinator = data.coordinator
+        label, keys = _target(hass, data, call)
+        weeks: dict[str, Any] = {}
+        for key in keys:
+            thermostat = coordinator.thermostats.get(key)
+            if thermostat is None:  # a member no bridge lists now
+                weeks[key] = {"schedule": None, "read_at": None}
+            elif call.data.get(ATTR_REFRESH):
+                week = await coordinator.async_get_schedule(key)
+                weeks[thermostat.friendly_name] = {"schedule": week, "read_at": "now"}
+            else:
+                weeks[thermostat.friendly_name] = {
+                    "schedule": thermostat.schedule,
+                    "read_at": thermostat.schedule_read_at,
+                }
+        shared, differing = schedule.common([entry["schedule"] for entry in weeks.values()])
+        return {
+            "target": label,
+            "schedule": shared,
+            "differing_days": differing,
+            "thermostats": weeks,
+        }
+
+    async def set_schedule(call: ServiceCall) -> ServiceResponse:
+        data = _loaded_entry(hass).runtime_data
+        label, keys = _target(hass, data, call)
+        results = await data.coordinator.async_set_schedule_many(keys, _days_asked(call))
+        return {"target": label, "thermostats": results}
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_SCHEDULE,
+        get_schedule,
+        schema=vol.Schema(
+            {
+                vol.Optional(ATTR_ROOM): cv.string,
+                vol.Optional(ATTR_THERMOSTAT): cv.string,
+                vol.Optional(ATTR_REFRESH, default=False): cv.boolean,
+            }
+        ),
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_SCHEDULE,
+        set_schedule,
+        schema=vol.Schema(
+            {
+                vol.Optional(ATTR_ROOM): cv.string,
+                vol.Optional(ATTR_THERMOSTAT): cv.string,
+                vol.Optional(ATTR_SCHEDULE): vol.Schema({vol.In(schedule.DAYS): list}),
+                vol.Optional(ATTR_DAYS): vol.All(cv.ensure_list, [vol.In(schedule.DAYS)]),
+                vol.Optional(ATTR_TRANSITIONS): list,
+            }
+        ),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
     hass.services.async_register(
         DOMAIN,
         SERVICE_CREATE_ROOM,

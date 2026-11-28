@@ -121,6 +121,15 @@
               "holiday": "Vacances",
               "antifrost": "Hors-gel"
             }
+          },
+          "schedule": {
+            "name": "Programme hebdomadaire"
+          },
+          "schedule_read_at": {
+            "name": "Programme lu le"
+          },
+          "schedule_differing_days": {
+            "name": "Jours du programme qui diffèrent"
           }
         }
       }
@@ -238,6 +247,51 @@
     },
     "value_not_allowed": {
       "message": "{key} prend {values}, pas « {value} » : rien n'a été envoyé."
+    },
+    "schedule_unavailable": {
+      "message": "Le pont ne peut pas lire le programme de {thermostats} maintenant : son canal développeur n'est pas en ligne. Rien n'a été envoyé."
+    },
+    "schedule_refused": {
+      "message": "Le pont n'a pas donné le programme : {error}"
+    },
+    "schedule_closed": {
+      "message": "Le pont n'ouvre pas l'écriture du programme pour : {thermostats}. Rien n'a été envoyé."
+    },
+    "schedule_not_confirmed": {
+      "message": "Programme non confirmé par le pont : {failed}. Confirmé : {confirmed}. Relire le programme avant de s'y fier."
+    },
+    "schedule_target": {
+      "message": "Nommer soit une pièce, soit un thermostat."
+    },
+    "room_empty": {
+      "message": "La pièce « {room} » n'a aucun thermostat."
+    },
+    "schedule_input": {
+      "message": "Donner soit schedule (chaque jour avec ses changements), soit days et transitions (les mêmes changements pour chaque jour nommé)."
+    },
+    "schedule_no_day": {
+      "message": "Donner au moins un jour. Rien n'a été envoyé."
+    },
+    "schedule_day_unknown": {
+      "message": "Jour inconnu « {day} » : monday à sunday. Rien n'a été envoyé."
+    },
+    "schedule_day_empty": {
+      "message": "{day} : décrire la journée en entier, à partir de 00:00. Rien n'a été envoyé."
+    },
+    "schedule_day_start": {
+      "message": "{day} : le premier changement d'une journée doit être à 00:00. Rien n'a été envoyé."
+    },
+    "schedule_transition_invalid": {
+      "message": "{day} : chaque changement a une heure (time, HH:MM) et une température (temperature, °C), rien d'autre. Rien n'a été envoyé."
+    },
+    "schedule_time_invalid": {
+      "message": "{day} : « {time} » n'est pas une heure de la journée au pas de 15 minutes (HH:MM). Rien n'a été envoyé."
+    },
+    "schedule_time_repeated": {
+      "message": "{day} : deux changements à {time}. Rien n'a été envoyé."
+    },
+    "schedule_temperature_invalid": {
+      "message": "{day} : {temperature} n'est pas une température de 5 à 30 °C par pas de 0,5. Rien n'a été envoyé."
     }
   },
   "services": {
@@ -286,6 +340,50 @@
     "list_rooms": {
       "name": "Lister les pièces",
       "description": "Renvoie les pièces, leurs thermostats, et les thermostats hors pièce."
+    },
+    "get_schedule": {
+      "name": "Lire le programme hebdomadaire",
+      "description": "Rend le programme hebdomadaire d'une pièce (les jours que ses thermostats partagent, et ceux qui diffèrent) ou d'un thermostat, tel que le pont l'a lu en dernier, ou lu maintenant.",
+      "fields": {
+        "room": {
+          "name": "Pièce",
+          "description": "La pièce : son identifiant d'appareil, ou son nom. Donner une pièce ou un thermostat."
+        },
+        "thermostat": {
+          "name": "Thermostat",
+          "description": "Un thermostat : son identifiant d'appareil, ou le nom que le pont lui donne. Donner une pièce ou un thermostat."
+        },
+        "refresh": {
+          "name": "Lire maintenant",
+          "description": "Demander au pont de relire le programme sur les appareils maintenant, au lieu de la dernière lecture (jusqu'à une heure)."
+        }
+      }
+    },
+    "set_schedule": {
+      "name": "Écrire le programme hebdomadaire",
+      "description": "Écrit les jours donnés du programme hebdomadaire sur les thermostats d'une pièce ou sur un thermostat, l'un après l'autre, chacun confirmé par son pont. Chaque jour est décrit en entier depuis 00:00 ; les autres jours restent tels quels.",
+      "fields": {
+        "room": {
+          "name": "Pièce",
+          "description": "La pièce : son identifiant d'appareil, ou son nom. Donner une pièce ou un thermostat."
+        },
+        "thermostat": {
+          "name": "Thermostat",
+          "description": "Un thermostat : son identifiant d'appareil, ou le nom que le pont lui donne. Donner une pièce ou un thermostat."
+        },
+        "days": {
+          "name": "Jours",
+          "description": "Jours qui reçoivent les changements donnés dans transitions."
+        },
+        "transitions": {
+          "name": "Changements",
+          "description": "Les changements de consigne de la journée, le premier à 00:00 : une liste de time (HH:MM, pas de 15 minutes) et temperature (5 à 30 °C par 0,5)."
+        },
+        "schedule": {
+          "name": "Programme",
+          "description": "À la place de days et transitions : chaque jour avec ses propres changements, par jour (saturday, sunday…)."
+        }
+      }
     }
   }
 }

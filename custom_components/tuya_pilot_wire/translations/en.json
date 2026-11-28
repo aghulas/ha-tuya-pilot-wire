@@ -121,6 +121,15 @@
               "holiday": "Holiday",
               "antifrost": "Frost protection"
             }
+          },
+          "schedule": {
+            "name": "Weekly schedule"
+          },
+          "schedule_read_at": {
+            "name": "Schedule read at"
+          },
+          "schedule_differing_days": {
+            "name": "Schedule days that differ"
           }
         }
       }
@@ -238,6 +247,51 @@
     },
     "value_not_allowed": {
       "message": "{key} takes {values}, not \"{value}\": nothing was sent."
+    },
+    "schedule_unavailable": {
+      "message": "The bridge cannot read the schedule of {thermostats} now: its developer channel is not online. Nothing was sent."
+    },
+    "schedule_refused": {
+      "message": "The bridge did not give the schedule: {error}"
+    },
+    "schedule_closed": {
+      "message": "The bridge does not open the schedule write for: {thermostats}. Nothing was sent."
+    },
+    "schedule_not_confirmed": {
+      "message": "Schedule not confirmed by the bridge: {failed}. Confirmed: {confirmed}. Read the schedule again before trusting it."
+    },
+    "schedule_target": {
+      "message": "Name either a room or a thermostat."
+    },
+    "room_empty": {
+      "message": "The room \"{room}\" has no thermostat."
+    },
+    "schedule_input": {
+      "message": "Give either schedule (each day its changes), or days and transitions (the same changes for every day named)."
+    },
+    "schedule_no_day": {
+      "message": "Give at least one day. Nothing was sent."
+    },
+    "schedule_day_unknown": {
+      "message": "Unknown day \"{day}\": monday to sunday. Nothing was sent."
+    },
+    "schedule_day_empty": {
+      "message": "{day}: give the day in full, starting at 00:00. Nothing was sent."
+    },
+    "schedule_day_start": {
+      "message": "{day}: the first change of a day must be at 00:00. Nothing was sent."
+    },
+    "schedule_transition_invalid": {
+      "message": "{day}: each change needs a time (HH:MM) and a temperature (°C), nothing else. Nothing was sent."
+    },
+    "schedule_time_invalid": {
+      "message": "{day}: \"{time}\" is not a time of the day on a 15-minute step (HH:MM). Nothing was sent."
+    },
+    "schedule_time_repeated": {
+      "message": "{day}: two changes at {time}. Nothing was sent."
+    },
+    "schedule_temperature_invalid": {
+      "message": "{day}: {temperature} is not a temperature from 5 to 30 °C in steps of 0.5. Nothing was sent."
     }
   },
   "services": {
@@ -286,6 +340,50 @@
     "list_rooms": {
       "name": "List the rooms",
       "description": "Returns the rooms, their thermostats, and the thermostats outside any room."
+    },
+    "get_schedule": {
+      "name": "Get the weekly schedule",
+      "description": "Returns the weekly schedule of a room (the days its thermostats share, and the days that differ) or of a thermostat, as last read by the bridge, or read now.",
+      "fields": {
+        "room": {
+          "name": "Room",
+          "description": "The room: its device id, or its name. Give a room or a thermostat."
+        },
+        "thermostat": {
+          "name": "Thermostat",
+          "description": "A thermostat: its device id, or the name the bridge gives it. Give a room or a thermostat."
+        },
+        "refresh": {
+          "name": "Read now",
+          "description": "Ask the bridge to read the schedule from the devices now, instead of the last reading (up to an hour old)."
+        }
+      }
+    },
+    "set_schedule": {
+      "name": "Set the weekly schedule",
+      "description": "Writes the given days of the weekly schedule to a room's thermostats or to a thermostat, one after the other, each confirmed by its bridge. Each day is described in full from 00:00; the other days stay as they are.",
+      "fields": {
+        "room": {
+          "name": "Room",
+          "description": "The room: its device id, or its name. Give a room or a thermostat."
+        },
+        "thermostat": {
+          "name": "Thermostat",
+          "description": "A thermostat: its device id, or the name the bridge gives it. Give a room or a thermostat."
+        },
+        "days": {
+          "name": "Days",
+          "description": "Days that get the changes given in transitions."
+        },
+        "transitions": {
+          "name": "Changes",
+          "description": "The day's setpoint changes, first at 00:00: a list of time (HH:MM, 15-minute step) and temperature (5 to 30 °C by 0.5)."
+        },
+        "schedule": {
+          "name": "Schedule",
+          "description": "Instead of days and transitions: each day with its own changes (saturday, sunday…)."
+        }
+      }
     }
   }
 }

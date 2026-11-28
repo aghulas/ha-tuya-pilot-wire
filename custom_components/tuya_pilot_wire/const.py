@@ -72,6 +72,14 @@ MIN_SET_INTERVAL = 10.0
 # How long the bridge has to answer a command (it writes, then reads the device back).
 SET_TIMEOUT = 45.0
 
+# Weekly schedule (contract §5): the request the Companion can build, and the time the bridge has
+# to answer one (it reads the developer API, writes, then reads back for up to 30 s). Like
+# `SET_KEYS`, nothing is opened by the Companion: `schedule/set` goes to a thermostat only while
+# its bridge lists it in `writes.requests` and the thermostat in `writes.devices`.
+SCHEDULE_SET = "schedule/set"
+SCHEDULE_GET = "schedule/get"
+SCHEDULE_TIMEOUT = 60.0
+
 # `hass.data` key of the coordinator an unloaded entry leaves for the entry set up next.
 DATA_HANDOVER = f"{DOMAIN}_handover"
 
@@ -85,7 +93,14 @@ SERVICE_CREATE_ROOM = "create_room"
 SERVICE_UPDATE_ROOM = "update_room"
 SERVICE_DELETE_ROOM = "delete_room"
 SERVICE_LIST_ROOMS = "list_rooms"
+SERVICE_GET_SCHEDULE = "get_schedule"
+SERVICE_SET_SCHEDULE = "set_schedule"
 
 ATTR_NAME = "name"
 ATTR_ROOM = "room"
 ATTR_THERMOSTATS = "thermostats"
+ATTR_THERMOSTAT = "thermostat"
+ATTR_SCHEDULE = "schedule"
+ATTR_DAYS = "days"
+ATTR_TRANSITIONS = "transitions"
+ATTR_REFRESH = "refresh"
