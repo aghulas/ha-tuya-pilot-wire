@@ -145,6 +145,12 @@ What a write does:
 For an automation: `climate.set_preset_mode` (`manual`), then `climate.set_temperature`; back with
 `climate.set_preset_mode` (`program`). A failed call is an error in the automation's trace.
 
+Entering `manual` restores the setpoint the thermostat keeps for that mode, which can be far from
+the one wanted (seen at 21 °C on one thermostat in
+[trial 2](validation/2026-11-28-trial-2-preset-and-setpoint.md)). Send the setpoint right after
+the preset, and if that call fails, set the preset back to `program` rather than leave the room
+heating on the kept value.
+
 ## Diagnostics
 
 Downloadable from the integration page. Thermostats and rooms are numbered instead of named; no
