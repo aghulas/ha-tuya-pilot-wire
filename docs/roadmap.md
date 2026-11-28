@@ -29,6 +29,12 @@ supervised trial ([`architecture.md`](architecture.md), "Rule for adding a route
   fanned out to every member and confirmed one by one; offered only where the bridge announces
   them open (`bridge/info.writes`, contract version 5). The trial option moves to the bridge.
 
+- **M5** — prepared 2026-11-28, not run: a read-only external converter for Zigbee2MQTT
+  ([`zigbee2mqtt/`](../zigbee2mqtt/), tested on synthetic frames), the parity table between the
+  two bridges ([`z2m-parity.md`](z2m-parity.md)), the Companion's handling of a thermostat
+  listed by both bridges and of a new device id on the way back, and the on-site procedure
+  ([`z2m-trial-procedure.md`](z2m-trial-procedure.md)). Waits for the owner's slot on site.
+
 ## Order of work
 
 M0 comes first and is short: it can change the contract and the scope. M1 and M2 do not wait for

@@ -35,7 +35,12 @@ else under a prefix is ignored.
   is created on the assumption that a bridge will publish something.
 - **Identity** is the Tuya device id when the bridge gives one, else the IEEE address. When a
   bridge gives both, the pair is remembered: the same thermostat later published by Zigbee2MQTT,
-  by IEEE address alone, keeps its entities.
+  by IEEE address alone, keeps its entities; back on its Tuya gateway with a new device id, the
+  known IEEE address keeps the key too.
+- **Listed by two bridges at once** (a move in progress), a thermostat is shown from the bridge
+  that held it while it is usable there; the other listing takes over when it is not, or when
+  the first stops listing it, and never flips back while it stays usable. Nothing is written
+  through the other listing. Details: [`z2m-parity.md`](z2m-parity.md).
 - **A reload keeps the fleet.** When the entry is reloaded (a room change does it), Home
   Assistant's MQTT client keeps its broker subscription, so the retained messages are not sent
   again; the new coordinator therefore starts from the fleet of the one it replaces, if that one

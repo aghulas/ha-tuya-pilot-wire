@@ -51,7 +51,8 @@ announce them. The Tuya APIs do not expose the Zigbee Basic cluster. See "On-sit
   for this project: the Companion must show what the device does, not regulate in its place.
 
 So M5 needs **a converter of our own**, written against the data-point table of
-`pytuya-pilot-wire` and proposed upstream once one thermostat has run on it.
+`pytuya-pilot-wire` and proposed upstream once one thermostat has run on it. Written
+2026-11-28, read only: [`zigbee2mqtt/`](../zigbee2mqtt/).
 
 ## Data points over Zigbee
 

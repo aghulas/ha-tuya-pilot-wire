@@ -14,7 +14,11 @@ Reading rules, all on the side of "an entity never lies":
   unknown, not kept from an earlier message;
 - a thermostat is usable only while its bridge says `online` and its own availability is not
   `offline`;
-- a thermostat that leaves `bridge/devices` leaves the fleet.
+- a thermostat that leaves `bridge/devices` leaves the fleet;
+- a thermostat listed by **two** bridges at once (while it moves from the Tuya gateway to a Zigbee
+  coordinator, or back) is shown from one of them only: the bridge that held it keeps it while it
+  is usable there, the other takes over when it is not, or when the first stops listing it. The
+  second listing is a **shadow**: read, never shown, never written to.
 """
 
 from __future__ import annotations
@@ -98,6 +102,8 @@ class CompanionCoordinator:
         self._pending: dict[str, asyncio.Future[dict[str, Any]]] = {}
         self._last_sent: dict[str, float] = {}  # thermostat key -> monotonic time of its last /set
         self.thermostats: dict[str, Thermostat] = {}
+        # Same thermostat listed by a second bridge, kept aside (see the module docstring).
+        self.shadows: dict[str, Thermostat] = {}
         self.bridge_online: dict[str, bool | None] = dict.fromkeys(self.prefixes)
         self.bridge_info: dict[str, dict[str, Any]] = {}
         self._by_topic: dict[tuple[str, str], str] = {}
@@ -164,6 +170,7 @@ class CompanionCoordinator:
         ):
             return False
         self.thermostats = previous.thermostats
+        self.shadows = previous.shadows
         self.bridge_online = previous.bridge_online
         self.bridge_info = previous.bridge_info
         self._by_topic = previous._by_topic
@@ -176,7 +183,9 @@ class CompanionCoordinator:
 
     def available(self, key: str) -> bool:
         """True while the thermostat is listed, its bridge online and itself not offline."""
-        thermostat = self.thermostats.get(key)
+        return self._usable(self.thermostats.get(key))
+
+    def _usable(self, thermostat: Thermostat | None) -> bool:
         if thermostat is None:
             return False
         return self.bridge_online.get(thermostat.prefix) is True and thermostat.online is not False
@@ -390,6 +399,8 @@ class CompanionCoordinator:
             online = parse_online(payload)
             if online is not None and online is not self.bridge_online[prefix]:
                 self.bridge_online[prefix] = online
+                for key in list(self.shadows):
+                    self._arbitrate(key)
                 self._notify()
         elif suffix == "bridge/info":
             info = _decode_json(payload)
@@ -414,14 +425,35 @@ class CompanionCoordinator:
         else:
             self._ingest(prefix, suffix, "state", payload)
 
-    def _ingest(self, prefix: str, name: str, kind: str, payload: str | bytes) -> None:
+    def _at(self, prefix: str, name: str) -> Thermostat | None:
+        """The thermostat, shown or shadow, whose topics are ``<prefix>/<name>``."""
         key = self._by_topic.get((prefix, name))
-        if key is None:
+        for thermostat in (self.thermostats.get(key or ""), self.shadows.get(key or "")):
+            if thermostat is not None and (thermostat.prefix, thermostat.friendly_name) == (
+                prefix,
+                name,
+            ):
+                return thermostat
+        return None
+
+    def _ingest(self, prefix: str, name: str, kind: str, payload: str | bytes) -> None:
+        thermostat = self._at(prefix, name)
+        if thermostat is None:
             if prefix not in self._listed:
                 self._early.setdefault((prefix, name), {})[kind] = payload
             return
-        if self._apply(self.thermostats[key], kind, payload):
+        if self._apply(thermostat, kind, payload):
+            self._arbitrate(thermostat.key)
             self._notify()
+
+    def _arbitrate(self, key: str) -> None:
+        """Show the shadow instead of the thermostat when only the shadow is usable."""
+        shadow = self.shadows.get(key)
+        shown = self.thermostats.get(key)
+        if shadow is None or shown is None:
+            return
+        if not self._usable(shown) and self._usable(shadow):
+            self.thermostats[key], self.shadows[key] = shadow, shown
 
     @staticmethod
     def _apply(thermostat: Thermostat, kind: str, payload: str | bytes) -> bool:
@@ -452,28 +484,27 @@ class CompanionCoordinator:
                 continue
             listed[described.key] = described
 
-        # What this prefix published before and no longer lists leaves the fleet.
+        # What this prefix published before and no longer lists leaves the fleet; a shadow of it
+        # on another bridge takes its place.
+        for key, shadow in list(self.shadows.items()):
+            if shadow.prefix == prefix and key not in listed:
+                del self.shadows[key]
+                self._unmap(shadow)
         for key, thermostat in list(self.thermostats.items()):
             if thermostat.prefix == prefix and key not in listed:
                 del self.thermostats[key]
-                self._by_topic.pop((prefix, thermostat.friendly_name), None)
+                self._unmap(thermostat)
+                if (shadow := self.shadows.pop(key, None)) is not None:
+                    self.thermostats[key] = shadow
 
         for key, described in listed.items():
             current = self.thermostats.get(key)
-            if current is not None and (current.prefix, current.friendly_name) == (
-                prefix,
-                described.friendly_name,
-            ):
-                current.vendor = described.vendor
-                current.model = described.model
-                current.ieee_address = described.ieee_address
-                continue
-            if current is not None:
-                # Renamed, or moved from another bridge: its topics changed, so what was read on
-                # the old ones no longer stands.
-                self._by_topic.pop((current.prefix, current.friendly_name), None)
-            self.thermostats[key] = described
-            self._by_topic[(prefix, described.friendly_name)] = key
+            if current is not None and current.prefix != prefix:
+                # Listed by another bridge too: this listing is the shadow.
+                self._place(self.shadows, key, described)
+                self._arbitrate(key)
+            else:
+                self._place(self.thermostats, key, described)
 
         self._listed.add(prefix)
         for (early_prefix, name), payloads in list(self._early.items()):
@@ -482,6 +513,33 @@ class CompanionCoordinator:
             del self._early[(early_prefix, name)]
             key = self._by_topic.get((prefix, name))
             if key is not None:
+                thermostat = self._at(prefix, name)
                 for kind, early_payload in payloads.items():
-                    self._apply(self.thermostats[key], kind, early_payload)
+                    if thermostat is not None:
+                        self._apply(thermostat, kind, early_payload)
+                self._arbitrate(key)
         self._notify()
+
+    def _unmap(self, thermostat: Thermostat) -> None:
+        topic = (thermostat.prefix, thermostat.friendly_name)
+        if self._by_topic.get(topic) == thermostat.key:
+            del self._by_topic[topic]
+
+    def _place(self, where: dict[str, Thermostat], key: str, described: Thermostat) -> None:
+        """Put a listed thermostat in ``where`` (the fleet or the shadows), keeping its state
+        when its bridge and name are unchanged."""
+        current = where.get(key)
+        if current is not None and (current.prefix, current.friendly_name) == (
+            described.prefix,
+            described.friendly_name,
+        ):
+            current.vendor = described.vendor
+            current.model = described.model
+            current.ieee_address = described.ieee_address
+            return
+        if current is not None:
+            # Renamed, or moved from another bridge: its topics changed, so what was read on
+            # the old ones no longer stands.
+            self._unmap(current)
+        where[key] = described
+        self._by_topic[(described.prefix, described.friendly_name)] = key

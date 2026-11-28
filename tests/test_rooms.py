@@ -88,6 +88,11 @@ async def test_store_rules_and_persistence(hass: HomeAssistant) -> None:
     assert store.resolve_key(None, "0x02") == "0x02"
     assert store.resolve_key("dev-3", None) == "dev-3"
     assert store.resolve_key(None, None) is None
+    # Re-paired to its gateway: a new device id, the same IEEE address. Same key, alias kept.
+    assert store.resolve_key("dev-9", "0x01") == "dev-1"
+    assert store.resolve_key("dev-9", None) == "dev-1"
+    assert store.resolve_key("dev-9", "0x01") == "dev-1"
+    assert store.aliases == {"dev-9": "dev-1"}
 
     store.delete(b.id)
     await store.async_flush()
@@ -95,6 +100,7 @@ async def test_store_rules_and_persistence(hass: HomeAssistant) -> None:
     await again.async_load()
     assert [(r.name, r.members) for r in again.rooms.values()] == [("Room A", ["k2"])]
     assert again.identities == {"0x01": "dev-1"}
+    assert again.aliases == {"dev-9": "dev-1"}
 
 
 # -- services ------------------------------------------------------------------------------------
