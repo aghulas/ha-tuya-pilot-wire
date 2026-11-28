@@ -63,6 +63,7 @@ class CompanionStore:
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self.rooms: dict[str, Room] = {}
         self.identities: dict[str, str] = {}  # IEEE address -> thermostat key
+        self.aliases: dict[str, str] = {}  # later Tuya device id -> thermostat key
 
     async def async_load(self) -> None:
         data = await self._store.async_load() or {}
@@ -71,6 +72,7 @@ class CompanionStore:
             for room in data.get("rooms", [])
         }
         self.identities = dict(data.get("identities", {}))
+        self.aliases = dict(data.get("aliases", {}))
 
     def _save(self) -> None:
         self._store.async_delay_save(self._data, 1)
@@ -82,6 +84,7 @@ class CompanionStore:
                 for room in self.rooms.values()
             ],
             "identities": dict(self.identities),
+            "aliases": dict(self.aliases),
         }
 
     async def async_flush(self) -> None:
@@ -93,17 +96,30 @@ class CompanionStore:
     def resolve_key(self, dev_id: str | None, ieee: str | None) -> str | None:
         """Stable key of a thermostat described with a Tuya device id and / or an IEEE address.
 
-        The Tuya device id is the key when the bridge gives one. An IEEE address seen once with a
-        device id keeps pointing at that key when it later comes alone, from another bridge.
+        The key is the first Tuya device id the thermostat was seen with, and it never changes
+        (unique ids hang on it):
+
+        - an IEEE address seen once with a device id keeps pointing at that key when it later
+          comes alone, from Zigbee2MQTT;
+        - a thermostat re-paired to its Tuya gateway gets a **new** device id but keeps its IEEE
+          address (the hardware's): the known address wins, and the new device id is remembered
+          as an alias of the key, for a later listing that gives the device id alone.
+
+        With neither seen before, the device id is the key, else the IEEE address.
         """
-        if dev_id:
-            if ieee and self.identities.get(ieee) != dev_id:
-                self.identities[ieee] = dev_id
+        known = self.identities.get(ieee) if ieee else None
+        if known is not None:
+            if dev_id and dev_id != known and self.aliases.get(dev_id) != known:
+                self.aliases[dev_id] = known
                 self._save()
-            return dev_id
-        if ieee:
-            return self.identities.get(ieee, ieee)
-        return None
+            return known
+        if dev_id:
+            key = self.aliases.get(dev_id, dev_id)
+            if ieee:
+                self.identities[ieee] = key
+                self._save()
+            return key
+        return ieee or None
 
     # -- rooms -------------------------------------------------------------------------------
 

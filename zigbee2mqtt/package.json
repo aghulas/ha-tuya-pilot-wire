@@ -1,0 +1,13 @@
+{
+  "name": "tuya-pilot-wire-z2m-converter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Zigbee2MQTT external converter for the Tuya pilot-wire thermostat TS0601 / _TZE204_fu1bfwza, and its tests",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test test/converter.test.js"
+  },
+  "devDependencies": {
+    "zigbee-herdsman-converters": "26.125.0"
+  }
+}

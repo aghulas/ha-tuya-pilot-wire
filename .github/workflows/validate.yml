@@ -18,5 +18,3 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
-          # No brand icons yet: they come with the first release.
-          ignore: brands
