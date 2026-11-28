@@ -112,6 +112,22 @@ class Thermostat:
         return _on_off(self.state.get("window_open"), "OPEN", "CLOSE")
 
     @property
+    def child_lock(self) -> bool | None:
+        return _on_off(self.state.get("child_lock"), "LOCK", "UNLOCK")
+
+    @property
+    def window_detection(self) -> bool | None:
+        return _on_off(self.state.get("window_detection"), "ON", "OFF")
+
+    @property
+    def local_temperature_calibration(self) -> float | None:
+        return self.number("local_temperature_calibration")
+
+    @property
+    def holiday_temperature(self) -> float | None:
+        return self.number("holiday_temperature")
+
+    @property
     def faults(self) -> list[str] | None:
         """Names of the active faults; empty when none; None when the bridge did not read them."""
         value = self.state.get("fault")

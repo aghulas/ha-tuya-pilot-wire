@@ -116,7 +116,10 @@
             "name": "Mode",
             "state": {
               "program": "Schedule",
-              "manual": "Manual"
+              "manual": "Manual",
+              "eco": "Eco",
+              "holiday": "Holiday",
+              "antifrost": "Frost protection"
             }
           }
         }
@@ -167,6 +170,20 @@
     "number": {
       "manual_setpoint": {
         "name": "Manual setpoint"
+      },
+      "local_temperature_calibration": {
+        "name": "Temperature calibration"
+      },
+      "holiday_temperature": {
+        "name": "Holiday setpoint"
+      }
+    },
+    "switch": {
+      "child_lock": {
+        "name": "Child lock"
+      },
+      "window_detection": {
+        "name": "Open window detection"
       }
     }
   },
@@ -215,6 +232,12 @@
     },
     "set_not_confirmed": {
       "message": "Not confirmed by the bridge: {failed}. Confirmed: {confirmed}. The state shown is what the devices confirmed."
+    },
+    "preset_closed": {
+      "message": "The bridge does not open the preset \"{preset}\" for: {thermostats}. Nothing was sent."
+    },
+    "value_not_allowed": {
+      "message": "{key} takes {values}, not \"{value}\": nothing was sent."
     }
   },
   "services": {

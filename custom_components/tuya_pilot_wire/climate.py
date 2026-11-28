@@ -1,8 +1,9 @@
 """Climate entities: one per room, and one per thermostat outside any room.
 
 Controls appear only where a bridge has opened them (`CompanionCoordinator.supports_set`) for
-**every** thermostat the entity stands for: the preset (`program` / `manual`, the raw names of
-the mode sensor) and the target temperature, which is the manual setpoint. Otherwise the entity
+**every** thermostat the entity stands for: the preset (the raw names of the mode sensor: the
+values open on every member, `writes.presets` of each bridge, `program` / `manual` for a
+version-5 bridge) and the target temperature, which is the manual setpoint. Otherwise the entity
 declares no feature and a single HVAC mode, the one reported, and gives nothing to press.
 
 A command goes to each thermostat in turn (`async_set_many`), each answered by its bridge; the
@@ -99,10 +100,21 @@ class _CompanionClimate(ClimateEntity):
         coordinator = self._data.coordinator
         return bool(members) and all(coordinator.supports_set(key, set_key) for key in members)
 
+    def _presets(self) -> list[str]:
+        """The presets open on every member, in the order of `SET_PRESETS`."""
+        members = self._members
+        if not members:
+            return []
+        coordinator = self._data.coordinator
+        common = set(SET_PRESETS)
+        for key in members:
+            common &= coordinator.open_presets(key)
+        return [preset for preset in SET_PRESETS if preset in common]
+
     @property
     def supported_features(self) -> ClimateEntityFeature:
         features = ClimateEntityFeature(0)
-        if self._open(PRESET):
+        if self._presets():
             features |= ClimateEntityFeature.PRESET_MODE
         if self._open(SETPOINT):
             features |= ClimateEntityFeature.TARGET_TEMPERATURE
@@ -131,15 +143,16 @@ class _CompanionClimate(ClimateEntity):
 
     @property
     def preset_modes(self) -> list[str] | None:
-        return list(SET_PRESETS) if self._open(PRESET) else None
+        return self._presets() or None
 
     @property
     def preset_mode(self) -> str | None:
-        """The members' common preset, when it is one that can be chosen here."""
-        if not self._open(PRESET):
-            return None
+        """The members' common preset as reported, when it is one that can be chosen here.
+
+        Any reported preset stays in the `preset` attribute and the mode sensor.
+        """
         preset = self._read("preset")
-        return preset if preset in SET_PRESETS else None
+        return preset if preset in self._presets() else None
 
     def _local_temperature(self) -> float | None:
         return self._read("local_temperature")

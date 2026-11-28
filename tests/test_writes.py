@@ -25,6 +25,7 @@ from custom_components.tuya_pilot_wire.const import (
     CONF_MQTT_PREFIXES,
     DOMAIN,
     LEGACY_CONF_TRIAL_THERMOSTAT,
+    SET_KEYS,
 )
 from custom_components.tuya_pilot_wire.diagnostics import async_get_config_entry_diagnostics
 
@@ -374,8 +375,13 @@ async def test_a_member_not_responding_stops_the_call(
         ("current_heating_setpoint", 20.3, "value_out_of_bounds"),
         ("current_heating_setpoint", 30.5, "value_out_of_bounds"),
         ("current_heating_setpoint", 4.5, "value_out_of_bounds"),
-        ("preset", "eco", "preset_not_writable"),
-        ("preset", "antifrost", "preset_not_writable"),
+        # A version-5 bridge opens `manual` and `program` only.
+        ("preset", "eco", "preset_closed"),
+        ("preset", "antifrost", "preset_closed"),
+        ("preset", "away", "preset_not_writable"),
+        ("preset", 3, "preset_not_writable"),
+        ("current_heating_setpoint", "20", "value_out_of_bounds"),
+        ("current_heating_setpoint", True, "value_out_of_bounds"),
     ],
 )
 async def test_values_are_checked_before_anything_is_sent(
@@ -545,8 +551,8 @@ async def test_diagnostics_name_no_thermostat(hass: HomeAssistant, opened: MockC
     assert writes["devices"] == ["thermostat_1", "thermostat_2", "unknown", "unknown"]
     assert writes["device"] == "thermostat_3"
     assert writes["closed"] == "thermostat_2 is not online for the account"
-    assert diagnostics["set_keys"] == BOTH
-    assert diagnostics["set_presets"] == ["program", "manual"]
+    assert diagnostics["set_keys"] == sorted(SET_KEYS)
+    assert diagnostics["set_presets"] == ["program", "manual", "eco", "holiday", "antifrost"]
     assert diagnostics["bridges"][TUYA]["open_for"] == []
     await bridge_info(hass, ["Thermostat A1", "Thermostat B1"])
     diagnostics = await async_get_config_entry_diagnostics(hass, opened)

@@ -13,7 +13,7 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 
 from . import CompanionConfigEntry
-from .const import SET_KEYS, SET_PRESETS
+from .const import SET_BOUNDS, SET_CHOICES, SET_KEYS, SET_PRESETS
 from .rooms import RoomState
 
 TO_REDACT = {
@@ -47,6 +47,19 @@ TO_REDACT = {
 }
 
 
+def _unnamed(value: Any, names: dict[str, str]) -> Any:
+    """``value`` with every thermostat name in its texts replaced by the thermostat's number."""
+    if isinstance(value, str):
+        for name, ref in sorted(names.items(), key=lambda item: -len(item[0])):
+            value = value.replace(name, ref)
+        return value
+    if isinstance(value, dict):
+        return {key: _unnamed(item, names) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_unnamed(item, names) for item in value]
+    return value
+
+
 def _info(info: dict[str, Any], names: dict[str, str]) -> dict[str, Any]:
     """A bridge's `bridge/info`, redacted, its `writes` naming thermostats by their number."""
     kept = async_redact_data({k: v for k, v in info.items() if k != "writes"}, TO_REDACT)
@@ -60,12 +73,18 @@ def _info(info: dict[str, Any], names: dict[str, str]) -> dict[str, Any]:
                 names.get(name, "unknown") if isinstance(name, str) else "unknown"
                 for name in writes["devices"]
             ]
-        if isinstance(writes.get("closed"), str):
-            # A reason may quote a thermostat's name.
-            for name, ref in sorted(names.items(), key=lambda item: -len(item[0])):
-                writes["closed"] = writes["closed"].replace(name, ref)
-        # `device` is now a number, not a name: the rest is redacted as everywhere.
-        kept["writes"] = async_redact_data(writes, TO_REDACT - {"device"})
+        trial = writes.get("trial")
+        if isinstance(trial, dict) and isinstance(trial.get("device"), str):
+            # Read by nobody here (the Companion offers no control for a trial), kept for the
+            # diagnosis, its thermostat numbered like the others.
+            writes["trial"] = {**trial, "device": names.get(trial["device"], "unknown")}
+        # A reason (`closed`, `refused`, a trial's) may quote a thermostat's name.
+        for name in ("closed", "refused", "trial"):
+            if name in writes:
+                writes[name] = _unnamed(writes[name], names)
+        # `device` is now a number, not a name, and `key` a `/set` key (in `trial`): the rest is
+        # redacted as everywhere.
+        kept["writes"] = async_redact_data(writes, TO_REDACT - {"device", "key"})
     return kept
 
 
@@ -122,6 +141,10 @@ async def async_get_config_entry_diagnostics(
                 "heating": state.heating,
                 "window_open": state.window_open,
                 "fault": state.fault,
+                "child_lock": state.child_lock,
+                "window_detection": state.window_detection,
+                "local_temperature_calibration": state.local_temperature_calibration,
+                "holiday_temperature": state.holiday_temperature,
                 "power": state.number("power"),
                 "energy": state.number("energy"),
             }
@@ -131,6 +154,8 @@ async def async_get_config_entry_diagnostics(
         "prefixes": list(coordinator.prefixes),
         "set_keys": sorted(SET_KEYS),
         "set_presets": list(SET_PRESETS),
+        "set_choices": {key: list(values) for key, values in SET_CHOICES.items()},
+        "set_bounds": {key: list(bounds) for key, bounds in SET_BOUNDS.items()},
         "bridges": {
             prefix: {
                 "online": coordinator.bridge_online.get(prefix),
@@ -141,6 +166,20 @@ async def async_get_config_entry_diagnostics(
                     if coordinator.thermostats[key].prefix == prefix
                     and any(coordinator.supports_set(key, set_key) for set_key in SET_KEYS)
                 ),
+                "open_keys": {
+                    refs[key]: sorted(
+                        set_key for set_key in SET_KEYS if coordinator.supports_set(key, set_key)
+                    )
+                    for key in coordinator.thermostats
+                    if coordinator.thermostats[key].prefix == prefix
+                    and any(coordinator.supports_set(key, set_key) for set_key in SET_KEYS)
+                },
+                "open_presets": {
+                    refs[key]: [p for p in SET_PRESETS if p in coordinator.open_presets(key)]
+                    for key in coordinator.thermostats
+                    if coordinator.thermostats[key].prefix == prefix
+                    and coordinator.open_presets(key)
+                },
             }
             for prefix in coordinator.prefixes
         },

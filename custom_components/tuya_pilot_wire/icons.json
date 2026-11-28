@@ -9,6 +9,25 @@
       "disagreement": {
         "default": "mdi:not-equal-variant"
       }
+    },
+    "switch": {
+      "child_lock": {
+        "default": "mdi:lock-open-variant",
+        "state": {
+          "on": "mdi:lock"
+        }
+      },
+      "window_detection": {
+        "default": "mdi:window-open-variant"
+      }
+    },
+    "number": {
+      "local_temperature_calibration": {
+        "default": "mdi:thermometer-lines"
+      },
+      "holiday_temperature": {
+        "default": "mdi:beach"
+      }
     }
   },
   "services": {

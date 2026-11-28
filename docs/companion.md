@@ -2,10 +2,11 @@
 
 Status: the read side is built, tested against synthetic messages that follow the
 [MQTT contract](https://github.com/aghulas/tuyapilot2mqtt/blob/main/docs/mqtt-contract.md), and
-runs on the reference install. Since v0.3.0 two writes are built, the preset (`program` /
-`manual`) and the manual setpoint, on room and thermostat climates. **The Companion opens none by
-itself**: each is offered for a thermostat only while its bridge announces it open for that
-thermostat (see "Writes" below).
+runs on the reference install. Since v0.3.0 two writes are built, the preset and the manual
+setpoint, on room and thermostat climates; since v0.5.0 also the further settings of contract
+version 7 (child lock, window detection, calibration, holiday setpoint, presets `eco` / `holiday`
+/ `antifrost`). **The Companion opens none by itself**: each is offered for a thermostat only
+while its bridge announces it open for that thermostat (see "Writes" below).
 
 ## What it reads
 
@@ -58,6 +59,8 @@ Per thermostat (device named after its bridge name):
 |---|---|
 | `climate` (only while the thermostat is in no room) | `system_mode`, `running_state`, `local_temperature`; attributes `preset`, `target_temperature` and the setpoints read; preset and setpoint controls where the bridge opens them |
 | `number` "Manual setpoint" (in a room or not) | `current_heating_setpoint`; exists once the bridge has opened the setpoint for the thermostat, unavailable while it is closed |
+| `switch` "Child lock", "Open window detection" (in a room or not) | `child_lock` (on = `LOCK`), `window_detection` (on = `ON`); same opening rule (see "Writes") |
+| `number` "Temperature calibration", "Holiday setpoint" (in a room or not) | `local_temperature_calibration` (−9…9 °C by 1), `holiday_temperature` (5…30 °C by 0.5); same opening rule |
 | `sensor` temperature, setpoint, mode | `local_temperature`; setpoint of the current preset; `preset` |
 | `sensor` power, energy, voltage, current | `power`, `energy` (kWh, `total_increasing`, usable in the Energy dashboard), `voltage`, `current` |
 | `binary_sensor` heating, window, fault | `running_state`, `window_open`, `fault` (names in the `faults` attribute) |
@@ -90,46 +93,58 @@ Per room (a device named after the room):
 | "Thermostats disagree" | on when two members report different on / off, mode or setpoint (an unknown value is not a disagreement); the `differing` attribute names which |
 | heating, window, fault | on as soon as one member says so; off only when every member says not; else unavailable |
 | power, energy | sums, only when **every** member reports the figure; else unavailable |
+| child lock, window detection, calibration, holiday setpoint (`switch`, `number`) | the members' common value; unavailable when one member does not report it or when they differ. While the room's control is open, a difference is named in "Thermostats disagree" (`differing`) and in the climate's `differing`; a setting with no room control open is not compared |
 
 A partial energy sum would read as a drop, and an energy counter that drops is read as a reset.
 For the same reason, changing a room's members shifts the room's energy counter: for the Energy
 dashboard, the per-thermostat energy sensors are the stable choice.
 
-A thermostat in a room keeps its sensors and binary sensors; only its own `climate` is replaced
-by the room's.
+A thermostat in a room keeps its sensors, binary sensors and setting entities; only its own
+`climate` is replaced by the room's.
 
 ## Writes
 
 | Key | Values | Offered on |
 |---|---|---|
-| `preset` | `program`, `manual` (the raw names of the mode sensor; `eco`, `holiday`, `antifrost` are read, never written) | `climate.set_preset_mode` |
+| `preset` | `program`, `manual`, `eco`, `holiday`, `antifrost` (the raw names of the mode sensor), each only while in `writes.presets` | `climate.set_preset_mode` |
 | `current_heating_setpoint` | 5–30 °C, step 0.5 (the device takes up to 40; the bridge stops at 30) | `climate.set_temperature`, the "Manual setpoint" `number` |
-| everything else (on / off, child lock, schedule…) | — | not built |
+| `child_lock` | `"LOCK"` / `"UNLOCK"` | `switch` "Child lock" (thermostat and room) |
+| `window_detection` | `"ON"` / `"OFF"` | `switch` "Open window detection" (thermostat and room) |
+| `local_temperature_calibration` | −9…9, step 1, sent as an integer | `number` "Temperature calibration" (thermostat and room) |
+| `holiday_temperature` | 5–30 °C, step 0.5 (device 5–40; the bridge stops at 30) | `number` "Holiday setpoint" (thermostat and room) |
+| everything else (on / off, eco and frost setpoints, schedule…) | — | not built |
 
 **Who opens a write: the bridge.** `const.SET_KEYS` is what the Companion can build and check; a
 key is published to a thermostat only while that thermostat's bridge publishes, in
-`bridge/info` (contract version 5):
+`bridge/info` (contract version 7):
 
 ```json
 "read_only": false,
-"writes": {"enabled": true, "keys": ["current_heating_setpoint", "preset"],
+"writes": {"enabled": true, "keys": ["current_heating_setpoint", "preset", "child_lock"],
+           "presets": ["manual", "program", "eco"], "settings": ["child_lock", "preset_eco"],
            "devices": ["<friendly name>", "..."]}
 ```
 
-the key in `writes.keys` and the thermostat in `writes.devices`. A version-4 bridge that names a
-single `writes.device` is read as a list of one. Anything else — `read_only` true or absent, no
+the key in `writes.keys` and the thermostat in `writes.devices`; for a preset, the value also in
+`writes.presets`. A version-5 bridge has no `writes.presets`: it opens `manual` and `program`
+only. A version-4 bridge that names a single `writes.device` is read as a list of one.
+`writes.settings` and `writes.refused` are shown in the diagnostics only, and **`writes.trial` is
+never offered**: a supervised trial is the owner's, run by hand on the bridge. Anything else — `read_only` true or absent, no
 `writes`, a malformed one — opens nothing. The owner's designation of the thermostats, and the
 supervised trial of each new write, live on the bridge side; the Companion has no option for it
 (the "Write trial" option of 0.2.x is dropped by the entry migration to 1.2).
 
-**A room** offers a control only when it is open for **every** member; a thermostat outside any
-room, when it is open for it. A control that closes disappears from the climate; the setpoint
-`number` stays, unavailable.
+**A room** offers a control only when it is open for **every** member — for the preset, the
+values open on every member; a thermostat, when it is open for it. A control that closes
+disappears from the climate; a `switch` or `number` stays, unavailable. Their unique ids are
+`<thermostat key>_<set key>` and `room_<room id>_<set key>` (`_child_lock`, `_window_detection`,
+`_local_temperature_calibration`, `_holiday_temperature`).
 
 What a write does:
 
 1. checks, for every thermostat concerned, before anything is published: the route is open, the
-   thermostat is usable, the value is in bounds (preset: `program` or `manual`), and for a
+   thermostat is usable, the value is one the key takes (bounds and step; `LOCK` / `UNLOCK`,
+   `ON` / `OFF`; a preset the bridge opens for each thermostat), and for a
    setpoint that the thermostat is in `manual` — in `program` the running schedule slot
    overwrites a written setpoint, and the other presets do not keep it (contract §4). A refusal
    here publishes nothing and names the thermostats concerned. To set a room's setpoint, set its
@@ -158,6 +173,9 @@ heating on the kept value.
 
 ## Diagnostics
 
-Downloadable from the integration page. Thermostats and rooms are numbered instead of named; no
+Downloadable from the integration page. They include what the Companion can build (`set_keys`,
+`set_presets`, `set_choices`, `set_bounds`), and per bridge the keys and presets open for each
+thermostat. Thermostats and rooms are numbered instead of named, in `writes` too (`devices`,
+`trial`, the reasons of `closed` and `refused`); no
 device id, IEEE address, gateway id, account, key or address is included. Measured values, modes
 and the property names each bridge publishes are kept.

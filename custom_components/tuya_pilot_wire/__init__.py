@@ -1,9 +1,10 @@
 """Tuya Pilot Wire Companion: pilot-wire thermostats read from MQTT bridges.
 
 The entry subscribes to the configured bridge prefixes, keeps rooms in Home Assistant storage and
-creates `climate`, `sensor`, `binary_sensor` and `number` entities. Writes (milestone M4) are the
-preset (`program` / `manual`) and the manual setpoint, offered only where a bridge announces them
-open (`bridge/info.writes`), on the room and thermostat climates and a per-thermostat `number`.
+creates `climate`, `sensor`, `binary_sensor`, `number` and `switch` entities. Writes (milestone
+M4) are the preset, the manual setpoint, and the settings a version-6 bridge can open (child lock,
+window detection, calibration, holiday setpoint), each offered only where a bridge announces it
+open (`bridge/info.writes`), per thermostat and per room.
 """
 
 from __future__ import annotations

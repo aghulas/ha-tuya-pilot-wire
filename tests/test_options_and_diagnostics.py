@@ -144,10 +144,23 @@ async def test_diagnostics_leak_no_identity(hass: HomeAssistant, fleet: MockConf
         assert leak not in text, leak
 
     assert diagnostics["prefixes"] == [Z2M, TUYA]
-    assert diagnostics["set_keys"] == ["current_heating_setpoint", "preset"]
+    assert diagnostics["set_keys"] == [
+        "child_lock",
+        "current_heating_setpoint",
+        "holiday_temperature",
+        "local_temperature_calibration",
+        "preset",
+        "window_detection",
+    ]
     assert diagnostics["bridges"][TUYA]["online"] is True
     assert diagnostics["bridges"][TUYA]["info"]["version"] == "0.1.0"
-    assert diagnostics["bridges"][Z2M] == {"online": None, "info": {}, "open_for": []}
+    assert diagnostics["bridges"][Z2M] == {
+        "online": None,
+        "info": {},
+        "open_for": [],
+        "open_keys": {},
+        "open_presets": {},
+    }
     first = diagnostics["thermostats"][0]
     assert first["ref"] == "thermostat_1" and first["identity"] == "tuya"
     assert first["has_ieee_address"] is True and first["available"] is True
