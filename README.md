@@ -55,7 +55,7 @@ on the same broker ([`tuyapilot2mqtt`](https://github.com/aghulas/tuyapilot2mqtt
 
 | Repository | Role |
 |---|---|
-| [`pytuya-pilot-wire`](https://github.com/aghulas/pytuya-pilot-wire) | Tuya channels, codecs and guarded writes (library) |
+| [`pytuya-pilot-wire`](https://github.com/aghulas/pytuya-pilot-wire) | Tuya channels, codecs and guarded writes (library, [on PyPI](https://pypi.org/project/pytuya-pilot-wire/)); used by the bridge, never by this integration |
 | [`tuyapilot2mqtt`](https://github.com/aghulas/tuyapilot2mqtt) | bridge and add-on: Tuya gateway → MQTT |
 | **`ha-tuya-pilot-wire`** (this one) | Home Assistant integration (Companion), domain `tuya_pilot_wire` |
 
