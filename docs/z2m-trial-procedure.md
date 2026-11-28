@@ -1,6 +1,10 @@
 # On-site trial: one thermostat from the Tuya gateway to Zigbee2MQTT, and back
 
-Status: **written, not run** (2026-11-28). For the owner, on site. Nothing here is done remotely
+Status: **written, not run; postponed** (2026-11-28) until new Zigbee coordinator dongles are
+installed on site. Done that day, remotely: B1 (backup), B2 (every thermostat's IEEE address is
+published by the bridge), B4 and B5 (state and schedule of the chosen thermostat recorded), B6,
+and B8 (the converter saved and loaded through Zigbee2MQTT's `bridge/request/converter/save`,
+no restart needed; it stays loaded). Nothing else. For the owner, on site. Nothing here is done remotely
 or unattended: pairing needs a hand on the thermostat. What the trial checks is listed in
 [`z2m-parity.md`](z2m-parity.md); its record goes to [`validation/`](validation/).
 
@@ -43,7 +47,7 @@ are Tuya's standard ones (the time the device asks for, the configure sequence).
 | B5 | Record its weekly schedule | the bridge's developer channel (schedule read) or the vendor app | the 7 days, written in the record (private copy: it is site data) |
 | B6 | Zigbee2MQTT healthy, on its usual version | add-on page; `zigbee2mqtt/bridge/state` | `online`, 2.14.x |
 | B7 | Availability is on in Zigbee2MQTT | its settings, *Availability* (do not open or copy `configuration.yaml`: it holds the network key) | on; else turn it on in the frontend |
-| B8 | The converter in place | copy `zigbee2mqtt/tuya_pilot_wire_fu1bfwza.js` of this repository to `/config/zigbee2mqtt/external_converters/` on the Pi, restart the add-on | the log says the external converter is loaded; the Danfoss heads still report |
+| B8 | The converter in place | publish `{"name": "tuya_pilot_wire_fu1bfwza.js", "code": …}` on `zigbee2mqtt/bridge/request/converter/save` (Zigbee2MQTT saves and loads it, no restart; `bridge/converters` then lists it), or copy `zigbee2mqtt/tuya_pilot_wire_fu1bfwza.js` of this repository to `/config/zigbee2mqtt/external_converters/` on the Pi, restart the add-on | the log says the external converter is loaded; the Danfoss heads still report |
 
 B8 changes the Pi: it is done with the owner's agreement, and undone at R6.
 
